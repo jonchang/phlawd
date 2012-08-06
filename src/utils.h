@@ -48,6 +48,7 @@ void fix_bad_chars(string & tfilen);
 void fix_bad_chars_for_seq_names(string & tfilen);
 string int_to_string(int n);
 typedef int8_t * SBMatrix;
+void replaceAll(string& str, const string& from, const string& to);
 //took out the const
 int get_swps3_score_and_rc_cstyle(SBMatrix mat, Sequence * inseq1, Sequence * inseq2);
 

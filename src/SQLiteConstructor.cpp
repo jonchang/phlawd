@@ -1318,8 +1318,13 @@ void SQLiteConstructor::reduce_genomes(vector<Sequence> * keep_seqs){
 	    seqreader.readFile((genefoldername+"genome_shrink_out").c_str(), sequences);
 	    for (int j=0;j<sequences.size();j++){
 		if (sequences.at(j).get_id() ==  keep_seqs->at(i).get_id()){
-		    keep_seqs->at(i).set_sequence(sequences.at(j).get_sequence());
-		}
+
+            //replace "-" with ""
+            string cleanSeq = sequences.at(j).get_sequence();
+            replaceAll(cleanSeq,"-","");
+
+		    keep_seqs->at(i).set_sequence(cleanSeq);
+ 		}
 	    }
 	    cout << "shrunk size: "<< keep_seqs->at(i).get_id() << endl;
 	}

@@ -146,13 +146,16 @@ int swps3_maxscores ( SBMatrix matrix , Sequence * known, Sequence * test){
         bool validTestSeq;
 	x2 = (char*)malloc(sizeof(char)*test->get_sequence().size());
 	memcpy(x2, test->get_sequence().c_str(), test->get_sequence().size());
+
 	validTestSeq = swps3_translateSequence(x2,test->get_sequence().size(),NULL);
         if (validTestSeq) {
                 db = x2;
                 //db=test->toString().c_str();
                 dbLen = test->get_sequence().size();
         } else {
-                printf("sequence %s is corrupt\n", test->get_ncbi_gi_id().c_str());
+                printf("sequence %d is corrupt:\nname: %s\ntax_id: %s\nncbi_gi_id: %s\nsequence: %s",
+                        test->get_id().c_str(),test->get_name().c_str(),test->get_ncbi_tax_id().c_str(),
+                        test->get_ncbi_gi_id().c_str(),test->get_sequence().c_str());
                 throw 1;
         }
 

@@ -226,7 +226,16 @@ string int_to_string(int n){
    return ss.str();
 }
 
-
+void replaceAll(string& str, const string& from, const string& to) {
+    /* performs substring replacement on a string */
+    if(from.empty())
+        return;
+    size_t start_pos = 0;
+    while((start_pos = str.find(from, start_pos)) != std::string::npos) {
+        str.replace(start_pos, from.length(), to);
+        start_pos += to.length(); // In case 'to' contains 'from', like replacing 'x' with 'yx'
+    }
+}
 //get the swps3 sequence score
 int get_swps3_score_and_rc_cstyle(SBMatrix mat,  Sequence * inseq1, Sequence * inseq2){
     return swps3_maxscores(mat, inseq1, inseq2);
