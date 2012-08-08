@@ -74,7 +74,7 @@ if __name__ == "__main__":
             val = toks[1]
 
         # for raw text parameters
-        if parname in ["db","clade","targetrank","seedfile"]:
+        if parname in ["db","targetrank","seedfile"]:
             pars[parname] = val
 
         # for numeric parameters
@@ -88,11 +88,18 @@ if __name__ == "__main__":
         # boolean parameters
         elif parname in ["nametargets",]:
             pars[parname] = True
+        
+        # additional processing
+        if parname == "clades":
+            pars[parname] = [v.strip() for v in val.split(",")]
     
-    required = ["db", "clade", "targetrank", "seedfile", "search"]
+    required = ["db", "clades", "targetrank", "seedfile", "search"]
     if not all(a in pars.keys() for a in required):
         print "config file is missing at least one required parameter (" + ", ".join(required) + ")"
         sys.exit(0)
+
+    idtag = "_".join(("_".join(pars["clades"]),"by",pars["targetrank"],pars["search"].strip("%").strip()))
+    print "output will be labeled as " + idtag
 
     # set up a temp directory to store fasta files for bl2seq
     tempdir_name = "guidemaker_temp"    
@@ -102,12 +109,13 @@ if __name__ == "__main__":
         pass
     tempdir = os.path.basename(tempdir_name) + "/"
 
-    # read sequences from seedfile
+    # open seedfile
     seedfile = open(pars["seedfile"],'r')
     seeds = dict()
     n_seeds = 0
     eof = False
-    
+        
+    # read seed sequences
     while True:
         line = seedfile.readline()
 
@@ -127,9 +135,7 @@ if __name__ == "__main__":
         if writelast and "seed_info" in locals().keys():
             # if there is a previous seed waiting to be written, do it 
             last_seed = Sequence(seed_info)
-            this_seedfile = tempdir + "seed." + \
-                            "_".join((pars["clade"],"by",pars["targetrank"],pars["search"].strip("%").strip())) + \
-                            "." + str(n_seeds) + ".fasta"
+            this_seedfile = tempdir + "seed." + str(n_seeds) + "." + idtag + ".fasta"
             this_seed_file = open(this_seedfile, "w")
             this_seed_file.write(">" + last_seed.taxon_name + "\n" + last_seed.sequence)
             this_seed_file.close()
@@ -150,41 +156,42 @@ if __name__ == "__main__":
 
     # container to hold best guide seq sets: n_seeds empty lists, indexed by seed number
     # need to deepcopy rows so they don't all reference the same object
-    empty_rows = map(deepcopy, [{"score": [], "expect": []},] * n_seeds)
-    proposed_sets = dict(zip(range(n_seeds),empty_rows))
+    proposed_set_for_seed = dict(zip(range(n_seeds),map(deepcopy,[[],]*n_seeds)))
 
     # find target taxa
-    targets = get_any_depth_children_by_rank(pars["db"], pars["clade"], pars["targetrank"])
+    targets = []
+    for clade in pars["clades"]:
+        targets += get_any_depth_children_by_rank(pars["db"], clade, pars["targetrank"])
 
     con = sqlite3.connect(pars["db"])
     cur = con.cursor()
     
     # get count of candidate seqs for this parent
     # should make this more elegant so we're not searching for parent twice
-    cur.execute("SELECT left_value, right_value FROM taxonomy WHERE " \
-                "name == ? AND name_class = 'scientific name';", (pars["clade"], ))
-    parent_lval, parent_rval = cur.fetchone()
-    cur.execute("SELECT count(*) FROM sequence WHERE ncbi_id IN " \
-                "(SELECT ncbi_id FROM taxonomy WHERE left_value > ? AND " \
-                "right_value < ?) AND description LIKE ?;", \
-                 (parent_lval, parent_rval, pars["search"]))
-    n_rows_all = cur.fetchone()[0]
-    print "Will be evaluating " + str(n_rows_all) + " possible guide sequences from " + pars["clade"]
+    n_rows_all = 0
+    for clade in pars["clades"]:
+        cur.execute("SELECT left_value, right_value FROM taxonomy WHERE " \
+                    "name == ? AND name_class = 'scientific name';", (clade, ))
+        parent_lval, parent_rval = cur.fetchone()
+        cur.execute("SELECT count(*) FROM sequence WHERE ncbi_id IN " \
+                    "(SELECT ncbi_id FROM taxonomy WHERE left_value > ? AND " \
+                    "right_value < ?) AND description LIKE ?;", \
+                     (parent_lval, parent_rval, pars["search"]))
+        n_rows_all += cur.fetchone()[0]
+    print "Will be evaluating " + str(n_rows_all) + " possible guide sequences from " + ", ".join(pars["clades"])
 
     i = 0
     for target in targets:
 
-        # to record the best score and expect value for each seed
-        bestscore_for_seed = dict(zip(range(n_seeds),[0,]*n_seeds))
+        # to record the best expect value for each seed
         # deepcopy rows so they don't all reference same object
         bestexpect_for_seed = dict(zip(range(n_seeds),map(deepcopy,[Decimal(BIGNUMBER),]*n_seeds)))
 
-        # to record the gi number of the candidate with the best score/expect for each seed
-        bestscore_gi_for_seed = dict(zip(range(n_seeds),[None,]*n_seeds))
+        # to record the gi number of the candidate with the best expect for each seed
         bestexpect_gi_for_seed = dict(zip(range(n_seeds),[None,]*n_seeds))
 
         if pars["nametargets"]:
-            # get count of candidate seqs for this target
+            # report count of candidate seqs for this target
             cur.execute("SELECT count(*) FROM sequence WHERE ncbi_id IN " \
                         "(SELECT ncbi_id FROM taxonomy WHERE left_value > ? AND " \
                         "right_value < ?) AND description LIKE ?;", \
@@ -192,13 +199,13 @@ if __name__ == "__main__":
             n_rows_target = cur.fetchone()[0]
             if i > 0:
                 print "\n"
-            print "Found " + str(n_rows_target) + " matching rows for family " + target["name"]
+            print "Found " + str(n_rows_target) + " matching rows for target " + target["name"]
             next_target_i = i + n_rows_target + 1
             next_target_message = ("(next target at " + str(next_target_i) + ")").rjust(30)
         else:
             next_target_message = ""
 
-        # get all candidate seqs for this target
+        # retrieve candidate seqs for this target
         cur.execute("SELECT identifier, name, description, seq FROM " \
                     "sequence INNER JOIN taxonomy ON sequence.ncbi_id == taxonomy.ncbi_id WHERE " \
                     "name_class == 'scientific name' AND left_value > ? AND right_value < ? AND " \
@@ -208,7 +215,11 @@ if __name__ == "__main__":
 
         # for each candidate sequence
         for seqinfo in result:
+
+            # user feedback
             i += 1
+            sys.stdout.write("\r{} / {} total {} ".format(i, n_rows_all, next_target_message))
+            sys.stdout.flush()
 
             # use Sequence object to parse query result for this candidate
             candidate = Sequence(seqinfo)
@@ -216,10 +227,6 @@ if __name__ == "__main__":
             # skip seqs not within range of acceptable lengths
             if len(candidate.sequence) < pars["minlength"] or len(candidate.sequence) > pars["maxlength"]:
                 continue
-
-            # user feedback
-            sys.stdout.write("\r{} / {} total {} ".format(i, n_rows_all, next_target_message))
-            sys.stdout.flush()
 
             # write the candidate to a temp file
             tempfile = open(tempdir + candidate.gi + ".fasta", "w")
@@ -229,16 +236,13 @@ if __name__ == "__main__":
             # use blastn to compare to each seed
             for s in range(n_seeds):
                 bl2seq_args = ["bl2seq", \
-                    "-i", tempdir + "seed." +  \
-                            "_".join((pars["clade"],"by",pars["targetrank"],pars["search"].strip("%").strip())) + \
-                            "." + str(s) + ".fasta",
+                    "-i", tempdir + "seed." + str(s) + "." + idtag + ".fasta",
                     "-j", tempdir + candidate.gi + ".fasta", \
                     "-p", "blastn"]
                 p1 = subprocess.Popen(bl2seq_args, stdout=subprocess.PIPE)
                 bl2seq_out = p1.communicate()[0]
 
                 # extract score info from the bl2seq output
-                candidate.score = 0
                 candidate.expect = Decimal(BIGNUMBER)
 
                 # skip results returning no hits
@@ -249,25 +253,12 @@ if __name__ == "__main__":
 #                if not bl2seq_out.find("***** No hits found ******") >= 0:
 #                    continue
 
-                # find score info for all hits in the bl2seq
-                score_sets = re.finditer(r"Score \= ([0-9.]+) bits \([0-9.]+\)\, Expect \= ([e0-9\-.]+)",bl2seq_out)
-                for scores in score_sets:
-                    c, e = [float(a) for a in scores.groups()]
-
-                    # sum the score values for all hits of this candidate to the current seed
-                    candidate.score += c
-
+                # find the best expect value for all hits to this sequence
+                expect_vals = re.finditer(r"Score \= [0-9.]+ bits \([0-9.]+\)\, Expect \= ([e0-9\-.]+)",bl2seq_out)
+                for e in [float(match.groups()[0]) for match in expect_vals]:
                     if Decimal(e) < candidate.expect:
-                        # find the best expected value for this sequence
                         candidate.expect = Decimal(e)
-                
-                # record the score if it is the best yet
-                if candidate.score > bestscore_for_seed[s]:
-                    # unless it is still not better than the min allowed score
-                    if candidate.score > pars["minscore"]:
-                        bestscore_for_seed[s] = candidate.score
-                        bestscore_gi_for_seed[s] = candidate.gi
-                
+                    
                 # record the expect value if it is the best yet
                 if candidate.expect < bestexpect_for_seed[s]:
                     # unless it is still not better than the max allowed expect
@@ -275,28 +266,22 @@ if __name__ == "__main__":
                         bestexpect_for_seed[s] = candidate.expect
                         bestexpect_gi_for_seed[s] = candidate.gi
 
-                # still need to add mechanism that stops searching once we have hit a sequence
-                # with a score > maxscore or an expect < minexpect
+                # still need to add mechanism that stops searching candidates for matches
+                # to a seed once we have hit a sequence with an expect < minexpect
 
-        # store best gis in proposed_sets
+        # add best candidate gi for this target to proposed sets
         for seed in range(n_seeds):
-            proposed_sets[seed]["score"].append(bestscore_gi_for_seed[seed])
-            proposed_sets[seed]["expect"].append(bestexpect_gi_for_seed[seed])
+            proposed_set_for_seed[seed].append(bestexpect_gi_for_seed[seed])
 
+    # makes ouput look nicer
     print ""
 
-    outfile = open(pars["clade"] +"_by_" + pars["targetrank"] + ".guideseqs", "w")
+    # write proposed sets to file
+    outfile = open(idtag + ".guideseqs", "w")
     for s in range(n_seeds):
-        outfile.write("seed " + seeds[s] + " by score:\n")
-        for gi in proposed_sets[s]["score"]:
-            if gi != None:
-                outfile.write(gi+"\n")
-        outfile.write("\n")
-
         outfile.write("seed " + seeds[s] + " by expect:\n")
-        for gi in proposed_sets[s]["expect"]:
+        for gi in proposed_set_for_seed[s]:
             if gi != None:
                 outfile.write(gi+"\n")
         outfile.write("\n")
-    
     outfile.close()
