@@ -20,6 +20,7 @@ private:
 	
 public:
     Sequence();
+    Sequence(int,string);
     Sequence(string,string,bool);
     Sequence(string,string);
     bool is_aligned();

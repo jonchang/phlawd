@@ -292,7 +292,7 @@ int SQLiteConstructor::run(){
 	gene_db.initialize(true);
     if(updateDB == true){
 	cout << "processing existing seqs" << endl;
-	gene_db.get_all_sequences(stored_seqs);
+	gene_db.load_all_sequences_into(stored_seqs);
 	for (int i=0;i<stored_seqs.size();i++){
 	    if(stored_seqs[i].get_name().find("user_") != 0)//not a user seq with no id
 		stored_seqs_ncbis.push_back(stored_seqs[i].get_id());
@@ -354,7 +354,7 @@ int SQLiteConstructor::run(){
     //start with a set of seqs given the first clade name and the regions
     startseqs = first_get_seqs_for_name_use_left_right(name_id, start_res);
     
-	cout << "first: " << startseqs.size() << endl;
+	cout << "found " << startseqs.size() << " matching sequences in the source db" << endl;
 
 	//if excluding gi's from file
 	if(excludegifromfile == true){
@@ -393,7 +393,8 @@ int SQLiteConstructor::run(){
 	get_same_seqs_openmp_SWPS3_justquery(startseqs,keep_seqs);
     else 
 	get_same_seqs_openmp_SWPS3(startseqs,keep_seqs);
-    cout << "blasted: "<< keep_seqs->size() << endl;
+    int n_seqs_first_pass = keep_seqs->size();
+    cout << "compared "<< n_seqs_first_pass << " to seqs in keepfile" << endl;
     if (justseqquery == true){
 	cout << "scores written to "<< gene_name<<".seqquery" << endl;
 	exit(0);
@@ -401,7 +402,7 @@ int SQLiteConstructor::run(){
     //assuming for now that all the user seqs are hits
 
     remove_duplicates_SWPS3(keep_seqs);
-    cout << "dups: "<< keep_seqs->size() << endl;
+    cout << "removed " << n_seqs_first_pass - keep_seqs->size() << " duplicate sequences, leaving " << keep_seqs->size() << " to align" << endl;
     //if userguidetree overlaps with less than a certain percentage, usertree = false
     if(usertree == true && userskipsearchdb == false){
 	double overlap = get_usertree_keepseq_overlap(keep_seqs);
@@ -440,7 +441,8 @@ int SQLiteConstructor::run(){
 	for(int j=0;j<keep_seqs->size();j++){
 	    cout << "adding: " << keep_seqs->at(j).get_ncbi_tax_id() << endl;
 	}
-	gene_db.add_seqs_to_db(keep_seqs);
+	cout << "adding sequences to db " << gene_db.get_name() << endl;
+	gene_db.add_sequences(keep_seqs);
 	//add the right gi numbers before add the rest of the seqs are added to keep_seqs
 	write_gi_numbers(keep_seqs);
 	gifile.close();
@@ -462,7 +464,10 @@ int SQLiteConstructor::run(){
 	for(int j=0;j<user_seqs->size();j++){
 	    cout << "adding: " << user_seqs->at(j).get_id() << endl;
 	}
-	gene_db.add_user_seqs_to_db(user_seqs);
+
+	cout << "adding sequences to database: " << gene_db.get_name() << endl;
+	gene_db.add_sequences(user_seqs);
+
 	if(user_seqs->size() + keep_seqs->size() == 0)
 	  exit(0);
 	//if update is more than 20% then redo run
@@ -612,11 +617,13 @@ int SQLiteConstructor::run(){
     }else{
 	write_gi_numbers(keep_seqs);
 	gifile.close();
-	gene_db.add_seqs_to_db(keep_seqs);
+	cout << "adding sequences to db " << gene_db.get_name() << endl;
+	gene_db.add_sequences(keep_seqs);
 	if(userfasta == true){
 	  write_user_numbers();
 	  ufafile.close();
-	  gene_db.add_user_seqs_to_db(user_seqs);
+	  cout << "adding user sequences to database: " << gene_db.get_name() << endl;
+	  gene_db.add_sequences(user_seqs);
 	}
 	sname_ids.push_back(sname_id);
 	snames.push_back(clade_name);
@@ -1857,7 +1864,8 @@ void SQLiteConstructor::saturation_tests(vector<string> name_ids, vector<string>
 		    temp_user_seqs->at(i).set_aligned_seq(temp_user_seqs->at(i).get_sequence());
 		    remove_seq_from_seq_vector(&allseqs,temp_user_seqs->at(i).get_id());
 		}
-		int alignid = gene_db.add_alignment(curnode->getName(),temp_seqs, temp_user_seqs);
+		string alignment_name = curnode->getName();
+		int alignid = gene_db.add_alignment(alignment_name, temp_seqs, temp_user_seqs);
 		if(updateDB==true)
 		    gene_db.toggle_alignment_update(alignid);
 		exist_alignments.push_back(alignid);
@@ -1897,7 +1905,8 @@ void SQLiteConstructor::saturation_tests(vector<string> name_ids, vector<string>
 		    for(int i=0;i<temp_user_seqs->size();i++){
 			remove_seq_from_seq_vector(&allseqs,temp_user_seqs->at(i).get_id());
 		    }
-		    int alignid = gene_db.add_alignment(curnode->getName(),temp_seqs, temp_user_seqs);
+		    string alignment_name = curnode->getName();
+		    int alignid = gene_db.add_alignment(alignment_name, temp_seqs, temp_user_seqs);
 		    if(updateDB==true)
 			gene_db.toggle_alignment_update(alignid);
 		    exist_alignments.push_back(alignid);
@@ -1951,7 +1960,7 @@ void SQLiteConstructor::saturation_tests(vector<string> name_ids, vector<string>
 	make_mafft_multiple_alignment(&tempseqs,&emptys);
 	match_an_aligned_seq(&allseqs[i]);
 	//add then update the aligned seqs
-	gene_db.add_seq_to_alignment(exist_alignments[bestind],allseqs[i]);
+	gene_db.add_sequence_to_alignment(exist_alignments[bestind],allseqs[i]);
 	//read mafft
 	vector<Sequence> alseqs;
 	get_aligned_file(&alseqs);

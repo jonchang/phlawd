@@ -9,6 +9,8 @@ getcontext().prec = 100
 
 # default value for some parameters
 BIGNUMBER = 10000;
+MANY_CLADES = 8;
+MANY_MORE_CLADES = 25;
 
 class Sequence():
     # just a container for convenient access
@@ -29,8 +31,13 @@ def get_any_depth_children_by_rank(db, parent, rank):
     sql = "SELECT ncbi_id, left_value, right_value FROM taxonomy WHERE name == ? AND name_class = 'scientific name';"
     cur.execute(sql, (parent, ))
     r = cur.fetchone()
-   
-    ncbi_id = r[0]
+    
+    try:
+        ncbi_id = r[0]
+    except TypeError:
+        print "Could not find any targets for " + parent
+        sys.exit(0)
+
     parent_lval = r[1]
     parent_rval = r[2]
     print "Found one taxon matching '" + parent + "' with ncbi_id: " + str(ncbi_id)
@@ -61,7 +68,8 @@ if __name__ == "__main__":
             "maxscore": Decimal(BIGNUMBER), \
             "minlength": 200, \
             "maxlength": 5000, \
-            "nametargets": False}
+            "nametargets": False, \
+            "searchliteral": False}
 
     # read config file(s)
     cfgfiles = []
@@ -85,19 +93,15 @@ if __name__ == "__main__":
                 val = toks[1]
 
             # for raw text parameters
-            if parname in ["db","targetrank","seedfile"]:
+            if parname in ["db","targetrank","seedfile","search"]:
                 pars[parname] = val
 
             # for numeric parameters
-            elif parname in ["maxexpect","minexpect","maxscore","minscore","minlength"]:
+            elif parname in ["maxexpect","minexpect","maxscore","minscore","minlength","maxlength"]:
                 pars[parname] = float(val)
 
-            # needs special formatting
-            elif parname == "search":
-                pars[parname] = "%" + val.strip("\"").strip("'") + "%"
-
             # boolean parameters
-            elif parname in ["nametargets",]:
+            elif parname in ["nametargets","searchliteral"]:
                 pars[parname] = True
             
             # additional processing
@@ -109,11 +113,25 @@ if __name__ == "__main__":
             print "config file is missing at least one required parameter (" + ", ".join(required) + ")"
             sys.exit(0)
 
-        idtag = "_".join(("_".join(pars["clades"]),"by",pars["targetrank"],pars["search"].strip("%").strip()))
+        if len(pars["clades"]) < MANY_CLADES:
+            nchars_clades = 6
+        elif len(pars["clades"]) < MANY_MORE_CLADES:
+            nchars_clades = 4
+        else:
+            nchars_clades = 2
+                                  
+        idtag = "_".join(("_".join([c[0:nchars_clades] for c in pars["clades"]]),"by",pars["targetrank"]))
+        # need special formatting if we are not accepting the search string literally
+        if not pars["searchliteral"]:
+            pars["search"] = "description like '%" + val.strip("\"").strip("'") + "%'"
+            idtag += pars["search"].strip("%").strip()
+        else:
+            pars["search"] = "(" + pars["search"] + ")"
+
         print "output will be labeled as " + idtag
 
         # set up a temp directory to store fasta files for bl2seq
-        tempdir_name = "guidemaker_temp"    
+        tempdir_name = "gm_temp"    
         try:
             os.mkdir(tempdir_name)
         except OSError:
@@ -184,10 +202,11 @@ if __name__ == "__main__":
             cur.execute("SELECT left_value, right_value FROM taxonomy WHERE " \
                         "name == ? AND name_class = 'scientific name';", (clade, ))
             parent_lval, parent_rval = cur.fetchone()
-            cur.execute("SELECT count(*) FROM sequence WHERE ncbi_id IN " \
-                        "(SELECT ncbi_id FROM taxonomy WHERE left_value > ? AND " \
-                        "right_value < ?) AND description LIKE ?;", \
-                         (parent_lval, parent_rval, pars["search"]))
+            sql = "SELECT count(*) FROM sequence WHERE ncbi_id IN " \
+                  "(SELECT ncbi_id FROM taxonomy WHERE left_value > ? AND " \
+                  "right_value < ?) AND " + pars["search"] + ";"
+            print sql
+            cur.execute(sql, (parent_lval, parent_rval))
             n_rows_all += cur.fetchone()[0]
         print "Will be evaluating " + str(n_rows_all) + " possible guide sequences from " + ", ".join(pars["clades"])
 
@@ -202,14 +221,19 @@ if __name__ == "__main__":
             bestexpect_gi_for_seed = dict(zip(range(n_seeds),[None,]*n_seeds))
 
             if pars["nametargets"]:
+                try:
+                    print "best match for seed " + "; ".join([": ".join((str(a), str(b))) for a, b in \
+                                                              [(j, proposed_set_for_seed[j][-1]) for j in range(n_seeds)]])
+                except IndexError:
+                    pass
+
                 # report count of candidate seqs for this target
                 cur.execute("SELECT count(*) FROM sequence WHERE ncbi_id IN " \
                             "(SELECT ncbi_id FROM taxonomy WHERE left_value > ? AND " \
-                            "right_value < ?) AND description LIKE ?;", \
-                             (target["lval"], target["rval"], pars["search"],))
+                            "right_value < ?) AND " + pars["search"] + ";", \
+                             (target["lval"], target["rval"]))
                 n_rows_target = cur.fetchone()[0]
-                if i > 0:
-                    print "\n"
+
                 print "Found " + str(n_rows_target) + " matching rows for target " + target["name"]
                 next_target_i = i + n_rows_target + 1
                 next_target_message = ("(next target at " + str(next_target_i) + ")").rjust(30)
@@ -219,9 +243,8 @@ if __name__ == "__main__":
             # retrieve candidate seqs for this target
             cur.execute("SELECT identifier, name, description, seq FROM " \
                         "sequence INNER JOIN taxonomy ON sequence.ncbi_id == taxonomy.ncbi_id WHERE " \
-                        "name_class == 'scientific name' AND left_value > ? AND right_value < ? AND " \
-                        "description LIKE ?;", \
-                         (target["lval"], target["rval"], pars["search"]))
+                        "name_class == 'scientific name' AND left_value > ? AND right_value < ? AND " + \
+                        pars["search"] + ";", (target["lval"], target["rval"]))
             result = cur.fetchall()
 
             # for each candidate sequence

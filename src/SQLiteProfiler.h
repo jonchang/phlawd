@@ -36,49 +36,71 @@ using namespace std;
 
 #include "libsqlitewrapped.h"
 
-class SQLiteProfiler{
+class SQLiteProfiler {
 private:
-    string gene_name;
-    string gene_db_name;
-    GeneDB gene_db;
-    vector<string> orig_align_names;
-    vector<int> first_profiles_dbids;
-    string cladename;
-    string db;
-    string profilefoldername;
-    bool use_orphan;
-    bool automated;
-    bool updatedb;
-    Tree * userguidetree;
-    bool usertree;
-    map<int, string> profile_id_name_map;
-    vector<int> updatednums;
-    vector<int> updatedprofiles;
 
-//functions
-    void get_children(string in_id, vector<string> * in_ids, vector<string> * in_keepids);
-    vector<string> get_final_children(string id);
-    string get_right_one(vector<string> allids,Query & res);
-    vector<string> get_left_right_children(string id);
-    void create_distances(string clade_name,map<int, map<int,double> > * numlist);
-    void create_distances_user_tree(vector<string> names,map<string,string> * numnames
-				    ,map<string,string> * namesnum, map<int, map<int,double> > * numlist);
-    void get_shortest_distance_with_dicts(vector<int>& nums,map<int, map<int,double> > & numlist, int * shortestnameone, 
-					  vector<int> * shortestnametwo);
-    void clean_before_profile(string infile);
-    void clean_dbseqs(int alignid);
-    int profile(map<int, map<int,double> > numlist);
-    string get_name_from_tax_id(string taxid);
-    void rename_final_alignment(int alignid);
-    int make_muscle_profile(int profile1,int profile2,int outprofile);
-    double get_muscle_spscore(string filename);
-    void test_outfile_exists(string filename);
-    void match_and_add_profile_alignment_to_db(int profileid);
+	bool use_orphan;								// ?
+	bool automated;									// ?
+	bool doing_update;								// are we performing an update
+	bool using_guide_tree;							// do we have a user-supplied guide tree
+
+	int final_alignment_dbid;						// the fully-inclusive profile alignment
+
+	string gene_name;								// name of locus that phlawd is aligning (from config file)
+	string clade_name;								// search clade (from config file)
+	string gene_db_fname;							// database to hold phlawd results
+	string source_db_fname;							// source database
+	string profile_dir_fname;						// location of profile alignments
+
+	Tree * user_guide_tree;							// the user supplied guide tree, if it exists
+	GeneDB gene_db;									// the interface object for the phlawd results db
+
+	vector<string> original_alignment_names;		// ?
+	vector<int> original_alignment_dbids;			// db ids of the original alignments (not profiles)
+
+	vector<int> updated_original_alignment_dbids;	// used if we are doing an update run
+	vector<int> updated_profile_alignment_dbids;	// used if we are doing an update run
+
+	vector<int> intermediate_profile_alignments;	// db ids of the profile alignments remaining to be cross-profiled
+	vector<int> original_alignments_to_profile;		// db ids of the original alignments remaining to be profiled
+
+	map<int, string> profile_id_name_map;			// hashmap associating profile alignments with their database ids
+
+	// taxonomic distances between every pair of original alignments,
+	// indexed by each alignment's db id in the profile_alignments table
+	map<int, map<int,double> > original_alignment_distances;
+
+	//functions
+	void get_children(string in_id, vector<string> * in_ids, vector<string> * in_keepids);
+	vector<string> get_final_children(string id);
+	string get_right_one(vector<string> allids, Query & res);
+	vector<string> get_left_right_children(string id);
+	void create_distances(string clade_name);
+	void create_distances_user_tree(vector<string> names, map<string, string> * numnames, map<string, string> * namesnum);
+	void find_next_original_alignment_set_to_profile(int * matched_alignment, vector<int> * closest_matches);
+	void clean_alignment(string infile);
+	void clean_dbseqs(int alignid);
+	void do_profile_alignments();
+	string get_name_from_tax_id(string taxid);
+	void rename_final_alignment(int alignid);
+	void make_muscle_profile(int aln1, int aln2);
+	double get_muscle_spscore(string filename);
+
+	void validate_outfile_exists(string filename);
+	void match_and_add_profile_alignment_to_db(int profileid);
+
+	void remove_from_intermediate_profiles(int value);
+	void remove_from_original_alignments_to_profile(int value);
+	void remove_int_from_vector(int value, vector<int> & the_vector);
+
+	int make_new_profile_alignment(int aln1, int aln2);
+
 public:
-    SQLiteProfiler(string gn, string gene_dbn,string cn, string dbs, bool autom,bool updb);
-    void prelimalign();
-    void run();
-    void set_user_guide_tree(Tree * tree);
+	SQLiteProfiler(string gn, string gene_dbn, string cn, string dbs,
+			bool autom, bool updb);
+	void prelimalign();
+	void run();
+	void set_user_guide_tree(Tree * tree);
 };
 
 #endif /* MQPROFILER_H_ */

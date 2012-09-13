@@ -13,18 +13,39 @@ using namespace std;
 class GeneDB{
 private:
     string name;//database filename
-    
+
+	void begin_transaction(sqlite3 * db);
+	void commit_transaction(sqlite3 * db);
+	void execute_query(sqlite3 * db, string & query); // this one is just a wrapper for the const char implementation
+	void execute_query(sqlite3 * db, const char * query);
+	void execute_simple_transaction(sqlite3 * db, string & query);
+	int insert_sequence(sqlite3 * db, Sequence & seq);
+	int insert_alignment(sqlite3 * db, string & alignment_name, int updated);
+	int insert_profile_alignment(sqlite3 * db, string & profile_name, int child1_id, int child2_id);
+	int insert_sequence_alignment_map(sqlite3 * db, int sequence_id, int alignment_id, string & sequence);
+	int insert_sequence_profile_map(sqlite3 * db, int sequence_id, int profile_id, string & sequence);
+
+
 public:
     GeneDB();
     GeneDB(string name);
-    void add_user_seqs_to_db(vector<Sequence> * user_seqs);
-    void add_seqs_to_db(vector<Sequence> * keep_seqs);
-    int add_alignment(string filen, vector<Sequence> * dbseqs, vector<Sequence> * userseqs);
+    ~GeneDB();
+
+//    void add_user_seqs_to_db(vector<Sequence> * user_seqs);
+
+    string get_name();
+    void add_sequences(vector<Sequence> * seqs);
+    int add_alignment(string & filen, vector<Sequence> * dbseqs, vector<Sequence> * userseqs);
+
+    int add_profile_alignment(string & profile_name, int child1_id, int child2_id, vector<Sequence> & sequences);
+    int add_profile_alignment(string & profile_name, vector<Sequence> & sequences);
+
+    int add_empty_intermediate_profile(int child1_id, int child2_id);
     void remove_alignment(int alignid);
-    int get_alignment_id_by_name(string alignname);
+    int get_alignment_id_by_name(string & alignname);
     void toggle_alignment_update(int alignid);
     void remove_alignment_by_name(string alignname);
-    void add_seq_to_alignment(int alignid,Sequence inseq);
+    void add_sequence_to_alignment(int alignid,Sequence & inseq);
     void get_align_seqs(int alignid, vector<Sequence> & seqs);
     void get_profile_align_seqs(int alignid, vector<Sequence> & seqs);
     void get_align_seqs_unaligned(int alignid, vector<Sequence> & seqs);
@@ -32,7 +53,7 @@ public:
     void initialize(bool overwrite);
     void update_align_seqs(int alignid,vector<Sequence> & seqs);
     void update_profile_align_seqs(int alignid, vector<Sequence> & seqs);
-    void get_all_sequences(vector<Sequence> & seqs);
+    void load_all_sequences_into(vector<Sequence> & seqs);
     void get_first_profile_alignments(vector<string> & names);
 
 //    void get_alignment_names(vector<string> & names);
@@ -43,12 +64,13 @@ public:
 
 //    void get_profile_alignment_nums(vector<int>&);
     void load_first_profile_ids_into(vector<int>&);
+    void load_sparse_sequences_from_original_alignment_into(vector<Sequence> & seqs, int alignment_id);
+    void load_original_alignment_info_into(map<int, string> & the_map);
 
     void remove_profile_alignments();
-    void copy_alignments_to_first_profiles(map<int,string> & profile_id_name_map);
+    void migrate_original_alignments_and_load_new_profile_info_into(map<int,string> & profile_id_name_map);
     void copy_alignments_to_first_profiles_updated(map<int, string> & profile_id_name_map,vector<int>& updatedprofsnums);
     int get_deepest_profile_for_alignment(int alignid);
-    int add_profile_alignment(int child1, int child2);
     void add_sequences_for_profile_alignment(int profilealignid,vector<Sequence> & seqs);
     void write_profile_alignment_to_file(int alignid,string filename);
     void write_profile_alignment_with_names_to_file(int alignid, string filename,bool ncbi);

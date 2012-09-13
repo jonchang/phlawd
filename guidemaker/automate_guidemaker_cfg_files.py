@@ -20,7 +20,7 @@ if __name__ == "__main__":
     
     for clades in [c.strip() for c in listfile]:
         print clades
-        outfile = open(outdir + "_".join([name.strip() for name in clades.split(",")])+".guide","w")
+        outfile = open(outdir + "_".join([name.strip() for name in [n[0:5] for n in clades.split(",")]])+".guide","w")
         for line in exampledata:
             outfile.write(line.replace("{}",clades)+"\n")
         outfile.close()

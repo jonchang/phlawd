@@ -16,6 +16,7 @@ using namespace std;
 
 Sequence::Sequence():id(),seq(),aligned(){}
 
+Sequence::Sequence(int _sqlite_id, string _al_seq):sqlite_id(_sqlite_id),al_seq(_al_seq),aligned(true),name(""),comment(""),ncbi_gi("0"),ncbi_tax("0"){}
 Sequence::Sequence(string _id, string _seq, bool _aligned):id(_id),seq(_seq),aligned(_aligned),name(""),comment(""),ncbi_gi("0"),ncbi_tax("0"){}
 Sequence::Sequence(string _id, string _seq):id(_id),seq(_seq),aligned(false),name(""),comment(""),ncbi_gi("0"),ncbi_tax("0"){}
 
