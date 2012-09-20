@@ -154,8 +154,8 @@ int swps3_maxscores ( SBMatrix matrix , Sequence * known, Sequence * test){
                 dbLen = test->get_sequence().size();
         } else {
                 printf("sequence %d is corrupt:\nname: %s\ntax_id: %s\nncbi_gi_id: %s\nsequence: %s",
-                        test->get_id().c_str(),test->get_name().c_str(),test->get_ncbi_tax_id().c_str(),
-                        test->get_ncbi_gi_id().c_str(),test->get_sequence().c_str());
+                        test->get_taxon_name().c_str(),test->get_taxon_name().c_str(),test->get_ncbi_tax_id().c_str(),
+                        test->get_ncbi_gi_number().c_str(),test->get_sequence().c_str());
                 throw 1;
         }
 

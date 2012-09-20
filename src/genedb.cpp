@@ -30,48 +30,9 @@ GeneDB::GeneDB() {
 
 GeneDB::GeneDB(string nm) :
 		name(nm) {
-
-//	cout << *db << endl;
-//	cout << &db << endl;
-//	cout << *db << endl;
-//	cout << &db << endl;
-
-	/*	db = &*temp_handle;
-
-	 if (rc != SQLITE_OK) {
-	 cerr << "Could not open sqlite3 connection to '" << name.c_str() <<  "'; error " << rc << endl;
-	 sqlite3_close(db);
-	 } */
-
 }
 
-GeneDB::~GeneDB() {
-//	sqlite3_close(db);
-}
-/*
- * Should check to see if the database exists, if not 
- * then it will initialize it. If so then it will make
- * sure that the structure is correct.
- */
-/*
- * SQL structure as of 0.3a
- * 
- * alignments
- * -
- * 
- * sequences
- * -
- *
- * sequence_alignment_map
- * -
- * 
- *
- * alignment_alignment_map
- * -
- * 
- * record
- * -
- */
+// TODO: would be nice for everything to have consistent db interaction
 
 /******************************************************************************************
  *
@@ -84,7 +45,7 @@ GeneDB::~GeneDB() {
  *
  */
 
-string GeneDB::get_name() {
+string GeneDB::get_db_name() {
 
 	/* just return the name of the phlawd db we are working with */
 	return name;
@@ -136,9 +97,15 @@ void GeneDB::execute_simple_transaction(sqlite3 * db, string & sql) {
 
 void GeneDB::initialize(bool overwrite) {
 
-	/* deletes the existing database (if it exists, and if
+
+	/*
+	 * deletes the existing database (if it exists, and if
 	 * overwriting is allowed), creates a new database, and
 	 * installs the requisite database structure.
+	 *
+	 * does not yet check whether an existing database that
+	 * is not overwritten has the proper structure, but this
+	 * could be a future improvement.
 	 */
 
 	bool install_new = true; 		// guilty until proven innocent
@@ -153,8 +120,8 @@ void GeneDB::initialize(bool overwrite) {
 			cerr << name << " exists" << endl;
 			install_new = false;
 
-			// TODO: if the db exists, and we aren't going to erase it, we
-			// should to make sure that it has the right structure
+			// TODO: here is where we should check to make sure that
+			// the existing db has the correct structure
 		}
 	}
 
@@ -164,24 +131,32 @@ void GeneDB::initialize(bool overwrite) {
 			cout << "connected to " << name << endl;
 
 			begin_transaction(db);
-			execute_query(db, "create table alignments(id INTEGER PRIMARY KEY, alignname VARCHAR(255),updated INTEGER);");
-			execute_query(db, "create index alignments_alignname on alignments(alignname);");
-			execute_query(db, "create table profile_alignments(id INTEGER PRIMARY KEY, child1 INTEGER, child2 INTEGER, name VARCHAR(255));");
-			// make index
+			execute_query(db, "create table alignments(id INTEGER PRIMARY KEY, name TEXT, updated INTEGER);");
+			execute_query(db, "create table profile_alignments(id INTEGER PRIMARY KEY, child1 INTEGER, child2 INTEGER, name TEXT);");
 			execute_query(db, "create table sequence_profile_map(id INTEGER PRIMARY KEY, sequence_id INTEGER, profile_id INTEGER, sequence TEXT);");
-			// make index
-			execute_query(db, "create table sequences(id INTEGER PRIMARY KEY, ncbi_id INTEGER, accession VARCHAR(255), name VARCHAR(255), sequence TEXT);");
-			execute_query(db, "create index sequences_ncbi_id on sequences(ncbi_id);");
-			execute_query(db, "create index sequences_name on sequences(name);");
+			execute_query(db, "create table sequences(id INTEGER PRIMARY KEY, ncbi_tax_id INTEGER, gi TEXT, tax_name TEXT, is_user_seq INTEGER, sequence TEXT);");
 			execute_query(db, "create table sequence_alignment_map(id INTEGER PRIMARY KEY, sequence_id INTEGER, alignment_id INTEGER, sequence TEXT);");
-			execute_query(db, "create index sequence_alignment_map_sequence_id on sequence_alignment_map(sequence_id);");
-			execute_query(db, "create index sequence_alignment_map_alignment_id on sequence_alignment_map(alignment_id);");
 			commit_transaction(db);
 
-			cout << "database created" << endl;
+			cout << "successfully installed empty tables into " << name << endl;
+
+			begin_transaction(db);
+			execute_query(db, "create index profile_alignments_id on profile_alignments(id);");
+			execute_query(db, "create index alignments_name on alignments(name);");
+			execute_query(db, "create index sequences_ncbi_tax_id on sequences(ncbi_tax_id);");
+			execute_query(db, "create index sequences_sqlite_id on sequences(id);");
+			execute_query(db, "create index sequences_tax_name on sequences(tax_name);");
+			execute_query(db, "create index sequence_alignment_map_sequence_id on sequence_alignment_map(sequence_id);");
+			execute_query(db, "create index sequence_alignment_map_alignment_id on sequence_alignment_map(alignment_id);");
+			execute_query(db, "create index sequence_profile_map_sequence_id on sequence_profile_map(sequence_id);");
+			execute_query(db, "create index sequence_profile_map_profile_id on sequence_profile_map(profile_id);");
+			commit_transaction(db);
+
+			cout << "successfully installed indices into " << name << endl << endl;
 
 		} else {
-			cout << "could not create the database: " << name << endl;
+			cerr << "could not create the database: " << name << endl;
+			exit(1);
 		}
 		sqlite3_close(db);
 	}
@@ -194,10 +169,11 @@ int GeneDB::insert_sequence(sqlite3 * db, Sequence & seq) {
 	 * corresponding db record id for the new row.
 	 */
 
-	string sql = "insert into sequences (ncbi_id, accession, name, sequence) values (";
+	string sql = "insert into sequences (ncbi_tax_id, gi, tax_name, is_user_seq, sequence) values (";
 	sql += seq.get_ncbi_tax_id() + ",'";
-	sql += seq.get_ncbi_gi_id() + "','";
-	sql += seq.get_name() + "','";
+	sql += seq.get_ncbi_gi_number() + "','";
+	sql += seq.get_taxon_name() + "',";
+	sql += to_string(seq.is_user_seq()) + ",'";
 	sql += seq.get_sequence() + "');";
 
 	execute_query(db, sql);
@@ -212,7 +188,7 @@ int GeneDB::insert_alignment(sqlite3 * db, string & alignment_name, int updated)
 	 * corresponding db record id for the new row.
 	 */
 
-	string sql = "insert into alignments (alignname, updated) values ('";
+	string sql = "insert into alignments (name, updated) values ('";
 	sql += alignment_name + "', ";
 	sql += to_string(updated) + ");";
 	execute_query(db, sql);
@@ -269,7 +245,73 @@ int GeneDB::insert_sequence_profile_map(sqlite3 * db, int sequence_id, int profi
 	return sqlite3_last_insert_rowid(db);
 }
 
-void GeneDB::add_sequence_to_alignment(int alignment_id, Sequence & sequence_obj) {
+void GeneDB::load_seqs_from_alignment_into(vector<Sequence> & seqs, int alignment_id, bool is_profile, bool want_aligned) {
+
+	/* this function retrieves all the original, unaligned sequences associated
+	 * with a given profile alignment and loads them into the passed vector,
+	 * retrieving and storing full sequence metadata in each new Sequence object,
+	 * including:
+	 *
+	 * sqlite_id 	-	the sqlite db id of the sequence record
+	 * ncbi_tax_id	-	the ncbi taxon id for this sequence
+	 * gi			-	the gi number for this sequence
+	 * tax_name		-	the name of the taxon the sequence represents
+	 * is_user_seq	-	whether this is a user sequence
+	 * sequence		-	the unaligned sequence itself
+	 */
+
+	Database conn(name);
+	Query query(conn);
+
+	string atype;
+	if(is_profile)
+		atype = "profile";
+	else
+		atype = "alignment";
+
+	// build the sql query
+	string sql = "select sequence_" + atype;
+	sql += "_map.sequence_id, sequences.ncbi_tax_id, sequences.gi, sequences.tax_name, sequences.is_user_seq, ";
+
+	// select whether we get an aligned or unaligned seq
+	if (want_aligned)
+		sql += "sequence_" + atype + "_map.sequence ";
+	else
+		sql += "sequences.sequence ";
+
+	// finish the sql
+	sql += "from sequence_" + atype + "_map, sequences where sequence_" + atype + "_map.sequence_id == sequences.id and sequence_" + atype + "_map." + atype + "_id == ";
+	sql += to_string(alignment_id) + ";";
+
+//	cout << sql << endl;
+	query.get_result(sql);
+
+	// load all the sequences into the vector
+	while (query.fetch_row()) {
+		int sqlite_id			= query.getval();
+		string ncbi_tax_id 		= to_string(query.getval());
+		string gi				= to_string(query.getstr());
+		string tax_name			= to_string(query.getstr());
+		bool is_user_seq		= !!query.getval();
+		string sequence			= to_string(query.getstr());
+		Sequence tseq = Sequence();
+
+		if (want_aligned)
+			tseq.set_aligned_sequence(sequence);
+		else
+			tseq.set_unaligned_sequence(sequence);
+
+		// set other sequence properties
+		tseq.set_sqlite_id(sqlite_id);
+		tseq.set_ncbi_tax_id(ncbi_tax_id);
+		tseq.set_ncbi_gi_number(gi);
+		tseq.set_taxon_name(tax_name);
+
+		seqs.push_back(tseq);
+	}
+}
+
+void GeneDB::associate_sequence_with_alignment(int alignment_id, Sequence & sequence_obj) {
 
 	/* calls insert_sequence_alignment_map to create a new
 	 * record associating the alignment id and the sequence
@@ -319,6 +361,13 @@ void GeneDB::add_sequences(vector<Sequence> * seqs) {
 
 int GeneDB::add_profile_alignment(string & profile_name, int child1_id, int child2_id, vector<Sequence> & sequences) {
 
+	/*
+	 * makes a new profile alignment, with the passed name and child ids, and
+	 * which contains the passed sequences. to do this, we first make a new
+	 * record for the new profile, and then add all the sequences to the
+	 * profile_sequence_map table, associating them with the new profile.
+	 */
+
 	int new_profile_alignment_id = -1;
 
 	sqlite3 *db;
@@ -328,7 +377,6 @@ int GeneDB::add_profile_alignment(string & profile_name, int child1_id, int chil
 
 		// create a new profile alignment record
 		new_profile_alignment_id = insert_profile_alignment(db, profile_name, child1_id, child2_id);
-		cout << "adding profile alignment: " << new_profile_alignment_id << endl;
 
 		// insert the seqs into profile_alignment sequences
 		vector<Sequence>::iterator s;
@@ -390,47 +438,47 @@ int GeneDB::add_empty_intermediate_profile(int child1_id, int child2_id) {
  *
  * deprecated: used to be used by SQLiteProfiler, now it uses add_empty_intermediate_profile
  *
-int GeneDB::add_profile_alignment(int child_id1, int child_id2) {
+ int GeneDB::add_profile_alignment(int child_id1, int child_id2) {
 
-	// just creates a new record in the profile alignment table, and stores the ids
-	// of its constituent child alignments
+ // just creates a new record in the profile alignment table, and stores the ids
+ // of its constituent child alignments
 
-	// open db connection
-	sqlite3 *conn2;
-	int rc = sqlite3_open(name.c_str(), &conn2);
-	char *zErrMsg = 0;
-	sqlite3_exec(conn2, "BEGIN TRANSACTION", NULL, NULL, &zErrMsg);
-	if (rc != SQLITE_OK) {
-		cerr << "Could not open database connection: " << *zErrMsg << endl;
-		sqlite3_free(zErrMsg);
-	}
+ // open db connection
+ sqlite3 *conn2;
+ int rc = sqlite3_open(name.c_str(), &conn2);
+ char *zErrMsg = 0;
+ sqlite3_exec(conn2, "BEGIN TRANSACTION", NULL, NULL, &zErrMsg);
+ if (rc != SQLITE_OK) {
+ cerr << "Could not open database connection: " << *zErrMsg << endl;
+ sqlite3_free(zErrMsg);
+ }
 
-	// build sql string
-	string sql = "insert into profile_alignments (child1, child2, name) values (";
-	sql += to_string(child_id1) + ",";
-	sql += to_string(child_id2) + ",'";
-	sql += to_string(0) + "');"; // not an ncbi (sas) - huh? (ceh)
+ // build sql string
+ string sql = "insert into profile_alignments (child1, child2, name) values (";
+ sql += to_string(child_id1) + ",";
+ sql += to_string(child_id2) + ",'";
+ sql += to_string(0) + "');"; // not an ncbi (sas) - huh? (ceh)
 
-	cout << sql << endl;
+ cout << sql << endl;
 
-	// insert record
-	rc = sqlite3_exec(conn2, sql.c_str(), 0, 0, 0);
-	int pid = sqlite3_last_insert_rowid(conn2);
-	sqlite3_exec(conn2, "COMMIT TRANSACTION", NULL, NULL, &zErrMsg);
-	if (rc != SQLITE_OK) {
-		cerr << "Record insert failed: " << *zErrMsg << endl;
-		sqlite3_free(zErrMsg);
-	}
+ // insert record
+ rc = sqlite3_exec(conn2, sql.c_str(), 0, 0, 0);
+ int pid = sqlite3_last_insert_rowid(conn2);
+ sqlite3_exec(conn2, "COMMIT TRANSACTION", NULL, NULL, &zErrMsg);
+ if (rc != SQLITE_OK) {
+ cerr << "Record insert failed: " << *zErrMsg << endl;
+ sqlite3_free(zErrMsg);
+ }
 
-	// close the db connection
-	sqlite3_close(conn2);
+ // close the db connection
+ sqlite3_close(conn2);
 
-	// return the record's db id
-	return pid;
-}
-*/
+ // return the record's db id
+ return pid;
+ }
+ */
 
-int GeneDB::add_alignment(string & filename, vector<Sequence> * dbseqs, vector<Sequence> * userseqs) {
+int GeneDB::add_original_alignment(string & filename, vector<Sequence> * dbseqs, vector<Sequence> * userseqs) {
 
 	/* creates a new alignment record in the database 'alignments' table,
 	 * and adds records to the sequence_alignment_map table to associate
@@ -443,16 +491,15 @@ int GeneDB::add_alignment(string & filename, vector<Sequence> * dbseqs, vector<S
 	 * is reached.
 	 */
 
-	// TODO: add the reading of the actual alignment file
 	int new_alignment_id = -1;
 
 	sqlite3 * db;
 	if (sqlite3_open(name.c_str(), &db) == SQLITE_OK) {
-		cout << "adding alignment to database: " << name << endl;
 		begin_transaction(db);
 
 		// first create a new alignment record
 		new_alignment_id = insert_alignment(db, filename, 0);
+		cout << "adding alignment to database: " << new_alignment_id << endl;
 
 		// now add the dbseqs
 		for (int i = 0; i < dbseqs->size(); i++) {
@@ -471,7 +518,7 @@ int GeneDB::add_alignment(string & filename, vector<Sequence> * dbseqs, vector<S
 		// clean up
 		commit_transaction(db);
 	} else
-		cerr << "Could not create the alignment because the database connection could not be opened" << endl;
+		cerr << "Could not create the alignment because the database " << name << " could not be opened" << endl;
 
 	sqlite3_close(db);
 
@@ -493,7 +540,7 @@ void GeneDB::toggle_alignment_update(int alignment_id) {
 	sqlite3_close(db);
 }
 
-void GeneDB::remove_alignment(int alignment_id) {
+void GeneDB::remove_original_alignment_by_id(int alignment_id) {
 
 	/* remove the alignment from the database */
 
@@ -533,29 +580,41 @@ void GeneDB::remove_profile_alignments() {
 	sqlite3_close(db);
 }
 
-void GeneDB::get_first_profile_alignments(vector<string> & names) {
+string GeneDB::get_original_alignment_name_for_db_id(int aln_id) {
 
-	/*
-	 * these would be the childless alignments, the first ones
-	 */
-
-	// TODO: convert this to consistent style database interaction
-
-	string sql = "select name from profile_alignments where child1 = 0 and child2 = 0;";
 	Database conn(name);
 	Query query(conn);
+
+	string aln_name;
+	string sql = "select name from alignments where id == ";
+	sql += to_string(aln_id) + ";";
 	query.get_result(sql);
 	while (query.fetch_row()) {
-		names.push_back(to_string(query.getstr()));
+		aln_name = query.getstr();
+	}
+	query.free_result();
+
+	return aln_name;
+}
+
+/* these would be the childless alignments, the first ones
+ */
+void GeneDB::get_first_profile_alignments(vector<string> & names) {
+
+	Database conn(name);
+	Query query(conn);
+
+	string sql = "select name from profile_alignments where child1 = 0 and child2 = 0;";
+	query.get_result(sql);
+	while (query.fetch_row()) {
+		names.push_back(query.getstr());
 	}
 	query.free_result();
 }
 
-int GeneDB::get_alignment_id_by_name(string & alignname) {
+int GeneDB::get_original_alignment_id_by_name(string & alignname) {
 
-	// TODO: convert this to consistent style database interaction
-
-	string sql = "select id from alignments where alignname = '";
+	string sql = "select id from alignments where name = '";
 	sql += alignname + "';";
 
 	Database conn(name);
@@ -569,130 +628,132 @@ int GeneDB::get_alignment_id_by_name(string & alignname) {
 	return alignid;
 }
 
-void GeneDB::remove_alignment_by_name(string alignname) {
-	int alignid = get_alignment_id_by_name(alignname);
-	remove_alignment(alignid);
+void GeneDB::remove_original_alignment_by_name(string alignname) {
+	int alignid = get_original_alignment_id_by_name(alignname);
+	remove_original_alignment_by_id(alignid);
 }
 
-void GeneDB::get_align_seqs(int alignid, vector<Sequence> & seqs) {
+/* pretty sure this is deprecated. replaced by load_sparse_seqs_for_original_alignment_into()
+ void GeneDB::get_align_seqs(int alignid, vector<Sequence> & seqs) {
 
-	/*
-	 * seqs is returned with the id being the sqlite id and the seq being the
-	 * current aligned seq
-	 */
+ /*
+ * seqs is returned with the id being the sqlite id and the seq being the
+ * current aligned seq
+ *
 
-	// TODO: convert this to consistent style database interaction
-	string alignids = to_string(alignid);
-	string sql = "select sequence_id,sequence from sequence_alignment_map where alignment_id = ";
-	sql += alignids + ";";
+ string alignids = to_string(alignid);
+ string sql = "select sequence_id,sequence from sequence_alignment_map where alignment_id = ";
+ sql += alignids + ";";
 
-	Database conn(name);
-	Query query(conn);
-	query.get_result(sql);
-	while (query.fetch_row()) {
-		string id;
-		string seq;
-		id = to_string(query.getval());
-		seq = to_string(query.getstr());
-		Sequence tseq(id, seq);
-		seqs.push_back(tseq);
-	}
-	query.free_result();
-}
+ Database conn(name);
+ Query query(conn);
+ query.get_result(sql);
+ while (query.fetch_row()) {
+ string id;
+ string seq;
+ id = to_string(query.getval());
+ seq = to_string(query.getstr());
+ Sequence tseq(id, seq);
+ seqs.push_back(tseq);
+ }
+ query.free_result();
+ } */
 
-void GeneDB::get_profile_align_seqs(int alignid, vector<Sequence> & seqs) {
+/* deprecated, replaced by load_sparse_sequences_for_profile_alignment_into()
+ void GeneDB::get_profile_align_seqs(int alignid, vector<Sequence> & seqs) {
 
-	// TODO: convert this to consistent style database interaction
 
-	string alignids = to_string(alignid);
-	string sql = "select sequence_id,sequence from sequence_profile_map where profile_id = ";
-	sql += alignids + ";";
+ string alignids = to_string(alignid);
+ string sql = "select sequence_id,sequence from sequence_profile_map where profile_id = ";
+ sql += alignids + ";";
 
-	Database conn(name);
-	Query query(conn);
-	query.get_result(sql);
-	while (query.fetch_row()) {
-		string id;
-		string seq;
-		id = to_string(query.getval());
-		seq = to_string(query.getstr());
-		Sequence tseq(id, seq);
-		tseq.set_sqlite_id(atoi(id.c_str()));
-		tseq.set_aligned_seq(seq);
-		seqs.push_back(tseq);
-	}
-	query.free_result();
-}
+ Database conn(name);
+ Query query(conn);
+ query.get_result(sql);
+ while (query.fetch_row()) {
+ string id;
+ string seq;
+ id = to_string(query.getval());
+ seq = to_string(query.getstr());
+ Sequence tseq(id, seq);
+ tseq.set_sqlite_id(atoi(id.c_str()));
+ tseq.set_aligned_seq(seq);
+ seqs.push_back(tseq);
+ }
+ query.free_result();
+ } */
 
-void GeneDB::get_align_seqs_unaligned(int alignid, vector<Sequence> & seqs) {
+/* deprecated, replaced by load_unaligned_seqs_from_original_alignment_into
+ void GeneDB::get_align_seqs_unaligned(int alignid, vector<Sequence> & seqs) {
 
-	/*
-	 * seqs is returned with the id being the sqlite id and the seq being the
-	 * original unaligned seq
-	 */
+ /*
+ * seqs is returned with the id being the sqlite id and the seq being the
+ * original unaligned seq
+ *
 
-	// TODO: convert this to consistent style database interaction
-	string alignids = to_string(alignid);
-	string sql =
-			"select sequence_alignment_map.sequence_id,sequences.sequence from sequence_alignment_map,sequences where sequence_alignment_map.sequence_id=sequences.id and sequence_alignment_map.alignment_id = ";
-	sql += alignids + ";";
+ string alignids = to_string(alignid);
+ string sql =
+ "select sequence_alignment_map.sequence_id,sequences.sequence from sequence_alignment_map,sequences where sequence_alignment_map.sequence_id=sequences.id and sequence_alignment_map.alignment_id = ";
+ sql += alignids + ";";
 
-	Database conn(name);
-	Query query(conn);
-	query.get_result(sql);
-	while (query.fetch_row()) {
-		string id;
-		string seq;
-		id = to_string(query.getval());
-		seq = to_string(query.getstr());
-		Sequence tseq(id, seq);
-		seqs.push_back(tseq);
-	}
-	query.free_result();
-}
+ Database conn(name);
+ Query query(conn);
+ query.get_result(sql);
+ while (query.fetch_row()) {
+ string id;
+ string seq;
+ id = to_string(query.getval());
+ seq = to_string(query.getstr());
+ Sequence tseq(id, seq);
+ seqs.push_back(tseq);
+ }
+ query.free_result();
+ } */
 
-void GeneDB::get_align_seq_unaligned_fully_initialized(string alignname, vector<Sequence> & seqs) {
+/* deprecated, replaced by load_full_unaligned_seqs_from_original_alignment_into()
+ void GeneDB::get_align_seq_unaligned_fully_initialized(string alignname, vector<Sequence> & seqs) {
 
-	/*
-	 * seqs is returned with the id being the ncbi_id and the seq being the
-	 * original unaligned seq and the other elements correctly defined
-	 * the alignname is the name in the filename column
-	 */
+ /*
+ * seqs is returned with the id being the ncbi_id and the seq being the
+ * original unaligned seq and the other elements correctly defined
+ * the alignname is the name in the filename column
+ *
 
-	// TODO: convert this to consistent style database interaction
-	int alignid = get_alignment_id_by_name(alignname);
-	string sql =
-			"select sequence_alignment_map.sequence_id,sequences.ncbi_id,sequences.accession,sequences.name,sequences.sequence from sequence_alignment_map,sequences where sequence_alignment_map.sequence_id=sequences.id and sequence_alignment_map.alignment_id = ";
-	sql += to_string(alignid) + ";";
-	Database conn(name);
-	Query query(conn);
-	query.get_result(sql);
-	while (query.fetch_row()) {
-		string id;
-		string ncbi_id;
-		string acc;
-		string name;
-		string seq;
-		id = to_string(query.getval());
-		ncbi_id = to_string(query.getval());
-		acc = to_string(query.getstr());
-		name = to_string(query.getstr());
-		seq = to_string(query.getstr());
-		Sequence tseq(ncbi_id, seq);
-		if (name.find("user_") != string::npos) { //user id is username if user seq
-			tseq.set_id(name);
-		}
-		tseq.set_ncbi_tax_id(ncbi_id);
-		tseq.set_ncbi_gi_id(acc);
-		tseq.set_name(name);
-		tseq.set_sqlite_id(atoi(id.c_str()));
-		seqs.push_back(tseq);
-	}
-	query.free_result();
-}
+ int alignid = get_alignment_id_by_name(alignname);
+ string sql =
+ "select sequence_alignment_map.sequence_id,sequences.ncbi_id,sequences.accession,sequences.name,sequences.sequence from sequence_alignment_map,sequences where sequence_alignment_map.sequence_id=sequences.id and sequence_alignment_map.alignment_id = ";
+ sql += to_string(alignid) + ";";
+ Database conn(name);
+ Query query(conn);
+ query.get_result(sql);
+ while (query.fetch_row()) {
+ string id;
+ string ncbi_id;
+ string acc;
+ string name;
+ string seq;
+ id = to_string(query.getval());
+ ncbi_id = to_string(query.getval());
+ acc = to_string(query.getstr());
+ name = to_string(query.getstr());
+ seq = to_string(query.getstr());
+ Sequence tseq(ncbi_id, seq);
+ if (name.find("user_") != string::npos) { //user id is username if user seq
+ tseq.set_id(name);
+ }
+ tseq.set_ncbi_tax_id(ncbi_id);
+ tseq.set_ncbi_gi_id(acc);
+ tseq.set_name(name);
+ tseq.set_sqlite_id(atoi(id.c_str()));
+ seqs.push_back(tseq);
+ }
+ query.free_result();
+ }
+ */
 
 void GeneDB::update_align_seqs(int alignment_id, vector<Sequence> & seqs) {
 
+	// TODO: needs better name, and description
 	/*
 	 * uses the get_sqlite_id and the get_aligned_seq
 	 */
@@ -739,57 +800,64 @@ void GeneDB::update_profile_align_seqs(int alignid, vector<Sequence> & seqs) {
 
 		commit_transaction(db);
 	} else
-		cerr << "Could not update the profile alignments because the database could not be opened" << endl;
+		cerr << "Could not update the profile alignments because the database " << name << " could not be opened" << endl;
 
 	sqlite3_close(db);
 }
 
-void GeneDB::load_all_sequences_into(vector<Sequence> & seqs) {
+void GeneDB::load_all_original_sequences_into(vector<Sequence> & seqs) {
 
-	/*
-	 * ncbi id will be the id and the comment
-	 * name will be the name
-	 * seq will be the original seq
-	 * sqlite_id will be the sqlite_id
+	/* create a sequence object for each original (i.e. unaligned) sequence
+	 * in the database, and add Sequence object to the passed vector.
 	 */
 
-	// TODO: update to use consistent style database interaction
-
-	// TODO: fix this so it is clear which fields are going where... it does not looking
-
-	string sql = "select * from sequences;";
 	Database conn(name);
 	Query query(conn);
+
+	string sql = "select id, ncbi_tax_id, gi, tax_name, is_user_seq, seq from sequences;";
 	query.get_result(sql);
+
 	while (query.fetch_row()) {
-		string id;
-		string ncbi_id;
-		string acc;
-		string name;
-		string seq;
-		id = to_string(query.getval());
-		ncbi_id = to_string(query.getval());
-		acc = to_string(query.getstr());
-		name = to_string(query.getstr());
-		seq = to_string(query.getstr());
-		Sequence tseq(ncbi_id, seq);
-		if (name.find("user_") != string::npos) { //user id is username if user seq
-			tseq.set_id(name);
-		}
-		tseq.set_ncbi_tax_id(ncbi_id);
-		tseq.set_ncbi_gi_id(acc);
-		tseq.set_sqlite_id(atoi(id.c_str()));
-		tseq.set_name(name);
+
+		// these are the exact field names from the sqlite database
+		int id = query.getval();
+		string ncbi_tax_id = to_string(query.getval());
+		string gi = to_string(query.getstr());
+		string tax_name = to_string(query.getstr());
+		bool is_user_seq = !!query.getval(); // using int-to-bool conversion !!
+		string seq = to_string(query.getstr());
+
+		Sequence tseq = Sequence();
+
+		// enter the data into the Sequence object
+		tseq.set_sqlite_id(id);
+		tseq.set_ncbi_tax_id(ncbi_tax_id);
+		tseq.set_ncbi_gi_number(gi);
+		tseq.set_taxon_name(tax_name);
+		tseq.set_is_user_seq(is_user_seq);
+		tseq.set_unaligned_sequence(seq); // original sequences are never aligned
+
+		// add the Sequence to the vector
 		seqs.push_back(tseq);
 	}
 	query.free_result();
 }
 
-void GeneDB::load_orig_alignment_names_into(vector<string> & names) {
+void GeneDB::load_orig_alignment_labels_into(vector<string> & names) {
 
-	// TODO: update to use consistent style database interaction
+	/*
+	 * the field in the sqlite db is called 'name', but it actually
+	 * stores either: (a) the ncbi taxon id associated with the aligned clade
+	 * or (b) an identifier extracted from the user tree (i think) if that is
+	 * used instead of the ncbi taxonomy.
+	 *
+	 * TODO: might be good to separate these things... have a column for ncbi
+	 * id. if we're using a user tree, then don't set the ncbi id. however,
+	 * we can't do a single run using *both* the ncbi taxonomy and a user tree,
+	 * so it might not matter to have them conflated in the alignment names.
+	 */
 
-	string sql = "select alignname from alignments;";
+	string sql = "select name from alignments;";
 	Database conn(name);
 	Query query(conn);
 	query.get_result(sql);
@@ -801,9 +869,7 @@ void GeneDB::load_orig_alignment_names_into(vector<string> & names) {
 	query.free_result();
 }
 
-void GeneDB::load_orig_alignment_nums_into(vector<int> & nums) {
-
-	// TODO: update to use consistent style database interaction
+void GeneDB::load_orig_alignment_db_ids_into(vector<int> & nums) {
 
 	string sql = "select id from alignments;";
 	Database conn(name);
@@ -823,8 +889,6 @@ void GeneDB::load_first_profile_ids_into(vector<int> & nums) {
 	 * typically used for updating and should be called after moving over updated
 	 */
 
-	// TODO: update to use consistent style database interaction
-
 	string sql = "select id from profile_alignments where child1 = 0 and child2 = 0;";
 	Database conn(name);
 	Query query(conn);
@@ -837,7 +901,20 @@ void GeneDB::load_first_profile_ids_into(vector<int> & nums) {
 	query.free_result();
 }
 
-void GeneDB::load_sparse_sequences_from_original_alignment_into(vector<Sequence> & seqs, int alignment_id) {
+/*
+void GeneDB::load_sparse_aligned_seqs_from_original_alignment_into(vector<Sequence> & seqs, int alignment_id) {
+
+	/*
+	 * this function retrieves all the sequences associated with a given original
+	 * alignment and loads them into the passed vector. aligned sequences are
+	 * stored in the sequence_alignment_map table without their original metadata
+	 * (it is accessible via the original sequence records in the sequence table,
+	 * with which they are associated). for this reason, the Sequence objects
+	 * that we create here store only minimal metadata, which are:
+	 *
+	 * sqlite_id
+	 * sequence
+	 *
 
 	// open db connection
 	Database conn(name);
@@ -850,23 +927,166 @@ void GeneDB::load_sparse_sequences_from_original_alignment_into(vector<Sequence>
 
 	// for each row, populate a new sequence object and load it into the vector
 	while (query.fetch_row()) {
-		int dbid = query.getval();
-		string seq = to_string(query.getstr());
-		Sequence tseq(dbid,seq);
+		int id 			= query.getval();
+		string sequence = to_string(query.getstr());
+
+		Sequence tseq = Sequence();
+		tseq.set_sqlite_id(id);
+		tseq.set_aligned_sequence(sequence);
+
 		seqs.push_back(tseq);
 	}
-
 	query.free_result();
 }
 
-void GeneDB::load_original_alignment_info_into(map<int, string> & the_map) {
+void GeneDB::load_sparse_aligned_seqs_from_profile_alignment_into(vector<Sequence> & seqs, int profile_id) {
+
+	/*
+	 * this function retrieves all the sequences associated with a given profile
+	 * alignment and loads them into the passed vector. aligned sequences are
+	 * stored in the sequence_profile_map table without their original metadata
+	 * (it is accessible via the original sequence records in the sequence table,
+	 * with which they are associated). for this reason, the Sequence objects
+	 * that we create here store only minimal metadata, which are:
+	 *
+	 * sqlite_id
+	 * sequence
+	 *
+
+	// TODO: check all calling functions to make sure they are correctly using the ids in these sequence objects
 
 	// open db connection
 	Database conn(name);
 	Query query(conn);
 
-	// do query
-	string sql = "select id, alignname from alignments;";
+	// get the sequences for this alignment
+	string sql = "select sequences_id, sequence from sequence_profile_map where profile_id == ";
+	sql += to_string(profile_id) + ";";
+	query.get_result(sql);
+
+	// for each row, populate a new sequence object and load it into the vector
+	while (query.fetch_row()) {
+		int id 			= query.getval();
+		string sequence = query.getstr();
+
+		Sequence tseq = Sequence();
+		tseq.set_sqlite_id(id);
+		tseq.set_aligned_sequence(sequence);
+
+		seqs.push_back(tseq);
+	}
+	query.free_result();
+}
+
+void GeneDB::load_sparse_unaligned_seqs_from_original_alignment_into(vector<Sequence> & seqs, int alignment_id) {
+
+	/*
+	 * this function retrieves all the original, unaligned sequences associated
+	 * with a given original alignment and loads them into the passed vector.
+	 * however, the Sequence objects created here store only minimal metadata,
+	 * which are:
+	 *
+	 * sqlite_id
+	 * sequence
+	 *
+
+	// TODO: check all calling functions to make sure they are correctly using the ids in these sequence objects
+
+	// open db connection
+	Database conn(name);
+	Query query(conn);
+
+	string sql = "select sequence_alignment_map.sequence_id, sequences.sequence from sequence_alignment_map, sequences ";
+	sql += "where sequence_alignment_map.sequence_id == sequences.id and sequence_alignment_map.alignment_id == ";
+	sql += to_string(alignment_id) + ";";
+	query.get_result(sql);
+
+	// for each row, populate a new sequence object and load it into the vector
+	while (query.fetch_row()) {
+		int id 			= query.getval();
+		string sequence = query.getstr();
+
+		Sequence tseq = Sequence();
+		tseq.set_sqlite_id(id);
+		tseq.set_unaligned_sequence(sequence);
+
+		seqs.push_back(tseq);
+	}
+	query.free_result();
+}
+
+void GeneDB::load_sparse_unaligned_seqs_from_profile_alignment_into(vector<Sequence> & seqs, int profile_id) {
+
+	/*
+	 * this function retrieves all the original, unaligned sequences associated
+	 * with a given profile alignment and loads them into the passed vector.
+	 * however, the Sequence objects we create here store only minimal metadata,
+	 * which are:
+	 *
+	 * sqlite_id
+	 * sequence
+	 *
+
+	// TODO: check all calling functions to make sure they are correctly using the ids in these sequence objects
+
+	Database conn(name);
+	Query query(conn);
+
+	string sql = "select sequence_profile_map.sequence_id, sequences.sequence from sequence_profile_map, sequences ";
+	sql += "where sequence_profile_map.sequence_id=sequences.id and sequence_profile_map.profile_id = ";
+	sql += to_string(profile_id) + ";";
+	query.get_result(sql);
+
+	// for each row, populate a new sequence object and load it into the vector
+	while (query.fetch_row()) {
+		int id 			= query.getval();
+		string sequence = to_string(query.getstr());
+
+		Sequence tseq = Sequence();
+		tseq.set_sqlite_id(id);
+		tseq.set_unaligned_sequence(sequence);
+
+		seqs.push_back(tseq);
+	}
+	query.free_result();
+} */
+
+void GeneDB::load_aligned_seqs_from_profile_alignment_into(vector<Sequence> & seqs, int profile_id) {
+	bool is_profile = true;
+	bool want_aligned = true;
+	load_seqs_from_alignment_into(seqs, profile_id, is_profile, want_aligned);
+}
+
+void GeneDB::load_unaligned_seqs_from_profile_alignment_into(vector<Sequence> & seqs, int profile_id) {
+	bool is_profile = true;
+	bool want_aligned = false;
+	load_seqs_from_alignment_into(seqs, profile_id, is_profile, want_aligned);
+}
+
+void GeneDB::load_aligned_seqs_from_original_alignment_into(vector<Sequence> & seqs, int alignment_id) {
+	bool is_profile = false;
+	bool want_aligned = true;
+	load_seqs_from_alignment_into(seqs, alignment_id, is_profile, want_aligned);
+}
+
+void GeneDB::load_unaligned_seqs_from_original_alignment_into(vector<Sequence> & seqs, int alignment_id) {
+	bool is_profile = false;
+	bool want_aligned = false;
+	load_seqs_from_alignment_into(seqs, alignment_id, is_profile, want_aligned);
+}
+
+void GeneDB::load_original_alignment_info_into(map<int, string> & the_map) {
+
+	/*
+	 * loads information about all the original alignments into the passed
+	 * map. the map keys are the database row ids, and the values are the
+	 * alignment names.
+	 */
+
+	Database conn(name);
+	Query query(conn);
+
+	string sql = "select id, name from alignments;";
 	query.get_result(sql);
 
 	// load the results into the map
@@ -881,38 +1101,105 @@ void GeneDB::load_original_alignment_info_into(map<int, string> & the_map) {
 	query.free_result();
 }
 
-void GeneDB::migrate_original_alignments_and_load_new_profile_info_into(map<int, string> & profile_id_name_map) {
+void GeneDB::load_alignments_to_update_info_into(map<int, string> & the_map) {
+
+	/*
+	 * loads information about all the updated alignments into the passed
+	 * map. the map keys are the database row ids, and the values are the
+	 * alignment names.
+	 */
+
+	Database conn(name);
+	Query query(conn);
+
+	string sql = "select id, name from alignments where updated == 1;";
+	query.get_result(sql);
+
+	// load the results into the map
+	while (query.fetch_row()) {
+		int tid;
+		string name;
+		tid = query.getval();
+		name = to_string(query.getstr());
+		the_map[tid] = name;
+	}
+
+	query.free_result();
+}
+
+void GeneDB::migrate_original_alignments_and_load_info_into(map<int, string> & profile_id_name_map) {
+
+	/*
+	 * creates exact copies in the 'profile_alignments' table, of all the
+	 * alignments in the 'alignments' table (the original alignments). to
+	 * do this, we iterate through the original alignments; on each one
+	 * collecting its sequences into a vector that we pass to
+	 * add_profile_alignment, which creates a new profile alignment and
+	 * loads them into.
+	 *
+	 * the database row id and the name of each new profile alignment that
+	 * we create (same name as the original alignment) are stored in the
+	 * passed map object as each new profile is created.
+	 */
 
 	// get info on all the original alignments
 	map<int, string> original_alignments;
 	load_original_alignment_info_into(original_alignments);
 
+	cout << "adding initial profile alignments: ";
 	map<int, string>::iterator a;
-	for(a = original_alignments.begin(); a != original_alignments.end(); ++a) {
+	for (a = original_alignments.begin(); a != original_alignments.end(); ++a) {
+		if (a != original_alignments.begin() && a != original_alignments.end())
+			cout << ", ";
 
 		int this_alignment_id = a->first;
 		string this_alignment_name = a->second;
 
 		// get the sequences associated this alignment
 		vector<Sequence> sequences;
-		load_sparse_sequences_from_original_alignment_into(sequences, this_alignment_id);
+		load_aligned_seqs_from_original_alignment_into(sequences, this_alignment_id);
 
 		// add a new profile alignment that is an exact duplicate of this original
 		int new_profile_id = add_profile_alignment(this_alignment_name, sequences);
+		cout << new_profile_id;
 
 		// record the new profile info
 		profile_id_name_map[this_alignment_id] = this_alignment_name;
 	}
+	cout << endl;
 }
 
+void GeneDB::migrate_alignments_to_update_and_load_info_into(map<int, string> & profile_id_name_map, vector<int> & updated_first_profiles_ids) {
 
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//
-//      stopping here for today.
-//
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// get info on all the alignments to update
+	map<int, string> alignments_to_update;
+	load_alignments_to_update_info_into(alignments_to_update);
 
+	cout << "adding initial profile alignments: ";
+	map<int, string>::iterator a;
+	for (a = alignments_to_update.begin(); a != alignments_to_update.end(); ++a) {
+		if (a != alignments_to_update.begin() && a != alignments_to_update.end())
+			cout << ", ";
 
+		int this_alignment_id = a->first;
+		string this_alignment_name = a->second;
+
+		// get the sequences associated this alignment
+		vector<Sequence> sequences;
+		load_aligned_seqs_from_original_alignment_into(sequences, this_alignment_id);
+
+		// add a new profile alignment that is an exact duplicate of this original
+		int new_profile_id = add_profile_alignment(this_alignment_name, sequences);
+		cout << new_profile_id;
+
+		// record the new profile info
+		profile_id_name_map[this_alignment_id] = this_alignment_name;
+		updated_first_profiles_ids.push_back(this_alignment_id);
+	}
+	cout << endl;
+}
+
+/* deprecated, replaced by migrate_alignments_to_update_and_load_info_into()
 void GeneDB::copy_alignments_to_first_profiles_updated(map<int, string> & profile_id_name_map, vector<int>& updatedprofsnums) {
 	string sql = "select id, alignname from alignments where updated = 1;";
 	Database conn(name);
@@ -979,15 +1266,15 @@ void GeneDB::copy_alignments_to_first_profiles_updated(map<int, string> & profil
 	}
 	query3.free_result();
 
-}
+} */
 
 int GeneDB::get_deepest_profile_for_alignment(int alignid) {
 
-	/* get the deepest alignment in the profile alignment table that includes the alignid.
-	 * the deepest alignment should always be the one with the largest db id, because these
-	 * ids increment as we progress down the guide tree (i.e. taxonomy). */
+	/* get the deepest alignment in the profile alignment table
+	 * that includes the alignid. the deepest alignment should
+	 * always be the one with the largest db id, because these
+	 * ids increment as we progress down the guide tree. */
 
-	// open db connection
 	Database conn(name);
 	Query query(conn);
 
@@ -995,45 +1282,42 @@ int GeneDB::get_deepest_profile_for_alignment(int alignid) {
 	stack<int> retstack;
 	retstack.push(alignid);
 
-	// this will hold the id of the deepest alignment, or NOT_YET_PROFILED if we find none
-	int deepest = NOT_YET_PROFILED
-	;
+	int deepest = NOT_YET_PROFILED;
 
 	while (!retstack.empty()) {
 		int curid = retstack.top();
 		retstack.pop();
 
-		// get all profile alignments containing the alignment id'd by retstack.top()
+		// get all profile alignments containing this one
 		string sql = "select id from profile_alignments where ";
 		sql += "child1 == " + to_string(curid) + " or ";
 		sql += "child2 == " + to_string(curid) + ";";
-//		cout << sql << endl;
 		query.get_result(sql);
 
 		// for every matching profile alignment
 		while (query.fetch_row()) {
-			int tid;
-			string name;
-			tid = query.getval();
-			cout << "\tfound " << tid << endl;
 
 			// if this profile alignment is the deepest yet; save it
+			int tid = query.getval();
 			if (tid > deepest)
 				deepest = tid;
 
-			// add this profile to the retstack so we can check for
-			// deeper alignments that contain it
+			// remember to check for deeper alignments that contain this one
 			retstack.push(tid);
 		}
 		query.free_result();
 	}
-	cout << "deepest profile for " << alignid << ": " << deepest << endl;
+
 	return deepest;
 }
 
+void GeneDB::write_profile_alignment_to_file(int this_profile_id, string filename, int format) {
 
-void GeneDB::write_profile_alignment_to_file(int alignid, string filename) {
-	string sql = "select sequence_id,sequence from sequence_profile_map where profile_id = ";
+	/* create a file in fasta format containing all the aligned sequences
+	 * in the identified profile alignment.
+	 */
+
+/*	string sql = "select sequence_id, sequence from sequence_profile_map where profile_id = ";
 	sql += to_string(alignid) + ";";
 	Database conn(name);
 	Query query(conn);
@@ -1045,23 +1329,32 @@ void GeneDB::write_profile_alignment_to_file(int alignid, string filename) {
 		name = to_string(query.getval());
 		seq = to_string(query.getstr());
 //	cout << sql << " " << name << " " << seq << endl;
-		Sequence tseq(name, seq);
+//		Sequence tseq(name, seq);
+		Sequence tseq = Sequence();
+		tseq.set_label(name);
+		tseq.set_aligned_sequence(seq);
 		seqs.push_back(tseq);
 	}
-	query.free_result();
+	query.free_result(); */
+
+	vector<Sequence> seqs;
+	load_aligned_seqs_from_profile_alignment_into(seqs, this_profile_id);
 	FastaUtil fu;
-	fu.writeFileFromVector(filename, seqs);
+	fu.writeFileFromVector(filename, seqs, format);
 }
 
+/* deprecated: all alignments are now written with rich sequence labels that include the names
 void GeneDB::write_profile_alignment_with_names_to_file(int alignid, string filename, bool ncbi) {
-	string sql =
-			"select sequence_profile_map.sequence_id,sequences.ncbi_id,sequences.name,sequence_profile_map.sequence from sequence_profile_map,sequences where sequence_profile_map.sequence_id=sequences.id and sequence_profile_map.profile_id = ";
+
+	string sql = "select sequence_profile_map.sequence_id, sequences.ncbi_tax_id, sequences.tax_name, sequence_profile_map.sequence ";
+	sql += "from sequence_profile_map, sequences where sequence_profile_map.sequence_id == sequences.id and sequence_profile_map.profile_id == ";
 	sql += to_string(alignid) + ";";
 	Database conn(name);
 	Query query(conn);
 	query.get_result(sql);
 	vector<Sequence> seqs;
 	while (query.fetch_row()) {
+		// TODO: why are we retrieving all these data if we're only using the name and sequence properties?
 		string sid;
 		string ncbiid;
 		string name;
@@ -1072,57 +1365,51 @@ void GeneDB::write_profile_alignment_with_names_to_file(int alignid, string file
 		seq = to_string(query.getstr());
 		if (ncbi && ncbiid != "0")
 			name = ncbiid;
-		Sequence tseq(name, seq);
+//		Sequence tseq(name, seq);
+		Sequence tseq = Sequence();
+		tseq.set_label(name);
+		tseq.set_aligned_sequence(seq);
 		seqs.push_back(tseq);
 	}
 	query.free_result();
 	FastaUtil fu;
 	fu.writeFileFromVector(filename, seqs);
-}
+} */
 
-/*
- * assumes that the seq id is the sqlite id and the seq is the aligned seq
- */
-void GeneDB::add_sequences_for_profile_alignment(int profilealignid, vector<Sequence> & seqs) {
+void GeneDB::add_sequences_for_profile_alignment(int profile_id, vector<Sequence> & seqs) {
 
-	// set variables for db connection
-	sqlite3 *conn2;
-	int rc;
-	char *zErrMsg = 0;
+	/* adds a record to the db for each sequence in the passed vector,
+	 * associating it with the identified profile alignment.
+	 */
 
-	// attempt to open the connection
-	rc = sqlite3_open(name.c_str(), &conn2);
-	rc = sqlite3_exec(conn2, "BEGIN TRANSACTION", NULL, NULL, &zErrMsg);
-	if (rc != SQLITE_OK) {
-		cerr << "SQL error: %s\n" << zErrMsg;
-		sqlite3_free(zErrMsg);
-	}
+	sqlite3 * db;
+	if (sqlite3_open(name.c_str(), &db) == SQLITE_OK) {
+		begin_transaction(db);
 
-	for (int i = 0; i < seqs.size(); i++) { // insert the sequences
-		string sql = "insert into sequence_profile_map (sequence_id,profile_id,sequence) values (";
-		sql += to_string(seqs[i].get_id()) + ",";
-		sql += to_string(profilealignid) + ",'";
-		sql += to_string(seqs[i].get_sequence()) + "');"; //not an ncbi
+		for (int i = 0; i < seqs.size(); i++) { // insert the sequences
 
-		// execute the query
-		rc = sqlite3_exec(conn2, sql.c_str(), 0, 0, &zErrMsg);
-		if (rc != SQLITE_OK) {
-			cerr << "SQL error: %s\n" << zErrMsg;
-			sqlite3_free(zErrMsg);
+			int sequence_id = seqs[i].get_sqlite_id();
+			string sequence = seqs[i].get_aligned_seq();
+			insert_sequence_profile_map(db, sequence_id, profile_id, sequence);
 		}
-	}
-	sqlite3_exec(conn2, "COMMIT TRANSACTION", NULL, NULL, &zErrMsg);
-	if (rc != SQLITE_OK) {
-		cerr << "SQL error: %s\n" << zErrMsg;
-		sqlite3_free(zErrMsg);
-	}
-	sqlite3_close(conn2);
+
+		commit_transaction(db);
+	} else
+		cerr << "Could not add the sequences because the database " << name << " could not be opened" << endl;
+
+	sqlite3_close(db);
 }
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//
+//      stopping here for today.
+//
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void GeneDB::get_updated_profs_names_delete_old(vector<string> & updatedprofs, vector<int> & updatedprofsnums, vector<int>&notupdatedprofnums) {
 	//get the updated names
 	string sql =
-			"select alignments.id,alignments.alignname,profile_alignments.id from alignments,profile_alignments where alignments.alignname=profile_alignments.name and alignments.updated = 1;";
+			"select alignments.id,alignments.name,profile_alignments.id from alignments,profile_alignments where alignments.name=profile_alignments.name and alignments.updated = 1;";
 	Database conn(name);
 	Query query(conn);
 	query.get_result(sql);

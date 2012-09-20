@@ -63,10 +63,8 @@ inline std::string to_string(const T& t) {
 	return ss.str();
 }
 
-SQLiteProfiler::SQLiteProfiler(string gn, string gene_dbn, string cn,
-		string dbs, bool autom, bool updb) :
-		gene_name(gn), gene_db_fname(gene_dbn), clade_name(cn), source_db_fname(
-				dbs), automated(autom), doing_update(updb) {
+SQLiteProfiler::SQLiteProfiler(string gn, string gene_dbn, string cn, string dbs, bool autom, bool updb) :
+		gene_name(gn), gene_db_fname(gene_dbn), clade_name(cn), source_db_fname(dbs), automated(autom), doing_update(updb) {
 	use_orphan = false;
 	using_guide_tree = false;
 	user_guide_tree = NULL;
@@ -78,24 +76,21 @@ SQLiteProfiler::SQLiteProfiler(string gn, string gene_dbn, string cn,
 void SQLiteProfiler::prelimalign() {
 	mkdir(profile_dir_fname.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IWOTH);
 	bool standard = true;
-	updated_original_alignment_dbids = vector<int>();
+	original_alignment_dbids_to_update = vector<int>();
 	if (doing_update == true) {
 		vector<string> samefiles; //files were not updated at all
 		bool newfiles = false; // if there are new files from MAD in align stage, kick out and tree as new for now
 		vector<string> originalalnfiles;
 		vector<string> curproffiles;
-		gene_db.load_orig_alignment_names_into(originalalnfiles);
+		gene_db.load_orig_alignment_labels_into(originalalnfiles);
 		gene_db.get_first_profile_alignments(curproffiles);
-		if (originalalnfiles.size() != curproffiles.size()
-				|| originalalnfiles.size() == 1)
+		if (originalalnfiles.size() != curproffiles.size() || originalalnfiles.size() == 1)
 			newfiles = true;
 		else { //double check that there aren't new ones
 			std::sort(originalalnfiles.begin(), originalalnfiles.end());
 			std::sort(curproffiles.begin(), curproffiles.end());
 			std::vector<string> v3;
-			std::set_intersection(originalalnfiles.begin(),
-					originalalnfiles.end(), curproffiles.begin(),
-					curproffiles.end(), std::back_inserter(v3));
+			std::set_intersection(originalalnfiles.begin(), originalalnfiles.end(), curproffiles.begin(), curproffiles.end(), std::back_inserter(v3));
 			if (v3.size() != originalalnfiles.size())
 				newfiles = true;
 		}
@@ -109,51 +104,36 @@ void SQLiteProfiler::prelimalign() {
 			vector<int> updatedprofsnums; //these will be the profile ids that are updated
 			vector<int> notupdatedprofsnums; //these will not be updated
 			//TODO: start editing here, need the
-			gene_db.get_updated_profs_names_delete_old(updatedprofs,
-					updatedprofsnums, notupdatedprofsnums);
-			updated_profile_alignment_dbids.clear();
+			gene_db.get_updated_profs_names_delete_old(updatedprofs, updatedprofsnums, notupdatedprofsnums);
+			profile_alignment_dbids_to_update.clear();
 			for (int i = 0; i < notupdatedprofsnums.size(); i++) {
-				int tid = gene_db.get_deepest_profile_for_alignment(
-						notupdatedprofsnums[i]);
-				if (tid == -1) {
-					updated_original_alignment_dbids.push_back(
-							notupdatedprofsnums[i]);
+				int tid = gene_db.get_deepest_profile_for_alignment(notupdatedprofsnums[i]);
+				if (tid == NOT_YET_PROFILED) {
+					original_alignment_dbids_to_update.push_back(notupdatedprofsnums[i]);
 					cout << "id: " << notupdatedprofsnums[i] << endl;
-				} else if (count(updated_profile_alignment_dbids.begin(),
-						updated_profile_alignment_dbids.end(), tid) == 0) {
-					updated_profile_alignment_dbids.push_back(tid);
+				} else if (count(profile_alignment_dbids_to_update.begin(), profile_alignment_dbids_to_update.end(), tid) == 0) {
+					profile_alignment_dbids_to_update.push_back(tid);
 					cout << "tid: " << tid << endl;
 				}
 			}
 		}
 	}
-	if (standard == true) { //not an update run
 
-		// these are properties of the SQLiteProfiler class, accessed by various methods throughout
-//		original_alignment_names = vector<string>();
-//		original_alignment_dbids = vector<int>();
+	if (standard == true) {
+		// not an update; copy all original alignments into the profiles
+		cout << "gathering all original alignments" << endl;
+		gene_db.migrate_original_alignments_and_load_info_into(profile_id_name_map);
 
-		cout << "getting alignments" << endl;
-		gene_db.load_orig_alignment_names_into(original_alignment_names);
-
-//		profile_id_name_map = map<int, string>();
-		gene_db.migrate_original_alignments_and_load_new_profile_info_into(profile_id_name_map);
-		gene_db.load_first_profile_ids_into(original_alignment_dbids);
-
-	} else { // updaterun
-
-		// only copy over the ones that are updated
-		// only align those files that are updated
-//		original_alignment_names = vector<string>();
-//		original_alignment_dbids = vector<int>();
-		cout << "getting updated alignment files" << endl;
-//		profile_id_name_map = map<int, string>();
-
-		gene_db.copy_alignments_to_first_profiles_updated(profile_id_name_map,
-				updated_original_alignment_dbids);
-		gene_db.load_orig_alignment_names_into(original_alignment_names);
-		gene_db.load_first_profile_ids_into(original_alignment_dbids);
+	} else {
+		// this is an update run; only copy the original alignments that have been updated
+		cout << "gathering updated alignment files" << endl;
+		gene_db.migrate_alignments_to_update_and_load_info_into(profile_id_name_map, original_alignment_dbids_to_update); // TODO: should this be profile_alignment_dbids_to_update?
 	}
+
+	// load the information we will use to start the profiling process
+	gene_db.load_orig_alignment_labels_into(original_alignment_names);
+	gene_db.load_first_profile_ids_into(original_alignment_dbids);
+
 }
 
 void SQLiteProfiler::set_user_guide_tree(Tree * tree) {
@@ -170,16 +150,15 @@ void SQLiteProfiler::run() {
 		//	map<int, map<int,double> > original_alignment_distances;
 		//TODO: make sure that this works with update , incomplete user guide tree
 		if (using_guide_tree == true) {
-			cout << "user guide tree" << endl;
-			create_distances_user_tree(original_alignment_names, &numnames,
-					&namesnum/*,&original_alignment_distances*/);
+			cout << "using user-supplied guide tree" << endl;
+			create_distances_user_tree(original_alignment_names, &numnames, &namesnum/*,&original_alignment_distances*/);
 		} else {		//use ncbi tree
-			cout << "ncbi guide tree" << endl;
-			create_distances(clade_name/*,&original_alignment_distances*/);
+			cout << "using ncbi taxonomy as guide tree" << endl;
+			create_distances(/*clade_name*/); // TODO: need to make sure that removing this function argument didn't break the updates or something. look for every call to this function and see what it does
 		}
 		//start profiling
 		cout << "profiling" << endl;
-		do_profile_alignments(/*original_alignment_distances*/);
+		do_profile_alignments(/*original_alignment_distances*/); // TODO: need to make sure that removing this function argument didn't break the updates or something. look for every call to this function and see what it does
 //		finalaln
 	} else {
 		final_alignment_dbid = 1;
@@ -190,13 +169,12 @@ void SQLiteProfiler::run() {
 		gene_db.toggle_updated_all_off();
 
 	cout << "writing final alignment" << endl;
-	rename_final_alignment(final_alignment_dbid);	//requires FINAL.aln
+	write_final_alignments(final_alignment_dbid);	//requires FINAL.aln
 	//remove_outliers
 	cout << "profile run completed" << endl;
 }
 
-void SQLiteProfiler::get_children(string in_id, vector<string> * in_ids,
-		vector<string> * in_keepids) {
+void SQLiteProfiler::get_children(string in_id, vector<string> * in_ids, vector<string> * in_keepids) {
 	Database conn(source_db_fname);
 	string sql = "SELECT ncbi_id FROM taxonomy WHERE parent_ncbi_id = " + in_id;
 	sql += " and name_class = 'scientific name';";
@@ -225,9 +203,7 @@ vector<string> SQLiteProfiler::get_final_children(string id) {
 			string tn = query.getstr();
 			string cln = query.getstr();
 			string ncbiid = query.getstr();
-			if (cln.find("scientific") != string::npos
-					&& tn.find("environmental") == string::npos
-					&& cln.find("environmental") == string::npos) {
+			if (cln.find("scientific") != string::npos && tn.find("environmental") == string::npos && cln.find("environmental") == string::npos) {
 				allids.push_back(ncbiid); //was taxon id, now ncbi id
 			}
 		}
@@ -250,8 +226,7 @@ vector<string> SQLiteProfiler::get_final_children(string id) {
 
 		for (int i = 0; i < keepids.size(); i++) {
 			Database conn(source_db_fname);
-			string sql = "SELECT name FROM taxonomy WHERE ncbi_id = "
-					+ keepids[i];
+			string sql = "SELECT name FROM taxonomy WHERE ncbi_id = " + keepids[i];
 			sql += " and name_class = 'scientific name';";
 			Query query(conn);
 			query.get_result(sql);
@@ -285,8 +260,7 @@ vector<string> SQLiteProfiler::get_final_children(string id) {
 vector<string> SQLiteProfiler::get_left_right_children(string id) {
 	vector<string> allids;
 	Database conn(source_db_fname);
-	string sql2 = "SELECT left_value,right_value FROM taxonomy WHERE ncbi_id = "
-			+ id;
+	string sql2 = "SELECT left_value,right_value FROM taxonomy WHERE ncbi_id = " + id;
 	sql2 += " and name_class = 'scientific name';";
 	Query query(conn);
 	query.get_result(sql2);
@@ -323,8 +297,7 @@ string SQLiteProfiler::get_right_one(vector<string> allids, Query & res) {
 }
 
 //ncbi one
-void SQLiteProfiler::create_distances(
-		string clade_name/*,map<int, map<int,double> > * original_alignment_distances*/) {
+void SQLiteProfiler::create_distances(/*string clade_name,map<int, map<int,double> > * original_alignment_distances*/) {
 //    original_alignment_distances->clear();
 	//get id for clade name
 	// Make SQL string and execute it
@@ -333,12 +306,10 @@ void SQLiteProfiler::create_distances(
 	Query query(conn);
 	string sql;
 	if (automated == false) {
-		sql = "SELECT ncbi_id FROM taxonomy WHERE name = '" + clade_name
-				+ "' and name_class = 'scientific name';";
+		sql = "SELECT ncbi_id FROM taxonomy WHERE name = '" + clade_name + "' and name_class = 'scientific name';";
 		query.get_result(sql);
 	} else if (automated == true) {
-		sql = "SELECT ncbi_id FROM taxonomy WHERE ncbi_id = '" + clade_name
-				+ "' and name_class = 'scientific name';";
+		sql = "SELECT ncbi_id FROM taxonomy WHERE ncbi_id = '" + clade_name + "' and name_class = 'scientific name';";
 		query.get_result(sql);
 	}
 	string cladeid;
@@ -349,8 +320,7 @@ void SQLiteProfiler::create_distances(
 	/*
 	 * get left and right for the cladeid
 	 */
-	string sql2 = "SELECT left_value,right_value FROM taxonomy WHERE ncbi_id = "
-			+ cladeid;
+	string sql2 = "SELECT left_value,right_value FROM taxonomy WHERE ncbi_id = " + cladeid;
 	sql2 += " and name_class = 'scientific name';";
 	Query query2(conn);
 	query2.get_result(sql2);
@@ -369,18 +339,15 @@ void SQLiteProfiler::create_distances(
 	//get the route to the clade name
 //    for(int i=0;i<names.size();i++){
 	map<int, string>::iterator it;
-	for (it = profile_id_name_map.begin(); it != profile_id_name_map.end();
-			it++) {
+	for (it = profile_id_name_map.begin(); it != profile_id_name_map.end(); it++) {
 		Database conn(source_db_fname);
 		//change to ncbi id
-		sql = "SELECT ncbi_id FROM taxonomy WHERE ncbi_id = " + (*it).second
-				+ ";";    //names[i]+";";
+		sql = "SELECT ncbi_id FROM taxonomy WHERE ncbi_id = " + (*it).second + ";";    //names[i]+";";
 //	cout << sql << endl;
 		Query query2(conn);
 		query2.get_result(sql);
 		string nameid = get_right_one(allids, query2);
-		sql = "SELECT parent_ncbi_id FROM taxonomy WHERE ncbi_id = " + nameid
-				+ " and name_class = 'scientific name';";
+		sql = "SELECT parent_ncbi_id FROM taxonomy WHERE ncbi_id = " + nameid + " and name_class = 'scientific name';";
 		Query query4(conn);
 		query4.get_result(sql);
 		string parentid = get_right_one(allids, query4);
@@ -388,8 +355,7 @@ void SQLiteProfiler::create_distances(
 		while (parentid != cladeid) {
 			route.push_back(parentid);
 			nameid = parentid;
-			sql = "SELECT parent_ncbi_id FROM taxonomy WHERE ncbi_id = "
-					+ nameid + " and name_class = 'scientific name';";
+			sql = "SELECT parent_ncbi_id FROM taxonomy WHERE ncbi_id = " + nameid + " and name_class = 'scientific name';";
 			//cout << sql << endl;
 			Query query5(conn);
 			query5.get_result(sql);
@@ -400,21 +366,18 @@ void SQLiteProfiler::create_distances(
 		map<int, double> tdistance;
 		map<int, string>::iterator it2;
 //	for(int j=0;j<names.size();j++){
-		for (it2 = profile_id_name_map.begin();
-				it2 != profile_id_name_map.end(); it2++) {
+		for (it2 = profile_id_name_map.begin(); it2 != profile_id_name_map.end(); it2++) {
 			if (it2 != it) {
 				//sql = "SELECT ncbi_id FROM taxonomy WHERE name = '"+names[j]+"'  and name_class = 'scientific name';";
 				//change to ncbi id
-				sql = "SELECT ncbi_id FROM taxonomy WHERE ncbi_id = "
-						+ (*it2).second + ";";                //names[j]+";";
+				sql = "SELECT ncbi_id FROM taxonomy WHERE ncbi_id = " + (*it2).second + ";";                //names[j]+";";
 				Query query5(conn);
 				query5.get_result(sql);
 				string jnameid = get_right_one(allids, query5);
 				double distance = 0;
 				while ((int) count(route.begin(), route.end(), jnameid) == 0) {
 					distance += 1;
-					sql = "SELECT parent_ncbi_id FROM taxonomy WHERE ncbi_id = "
-							+ jnameid + " and name_class = 'scientific name';";
+					sql = "SELECT parent_ncbi_id FROM taxonomy WHERE ncbi_id = " + jnameid + " and name_class = 'scientific name';";
 					Query query6(conn);
 					query6.get_result(sql);
 					jnameid = get_right_one(allids, query6);
@@ -429,14 +392,12 @@ void SQLiteProfiler::create_distances(
 			}
 		}
 		(/***/original_alignment_distances)[(*it).first] = tdistance;
-		cout << "distances complete: " << (*it).second << " " << (*it).first
-				<< endl;
+		cout << "distances complete: " << (*it).second << " " << (*it).first << endl;
 	}
 }
 
 //user tree one
-void SQLiteProfiler::create_distances_user_tree(vector<string> ifile_names,
-		map<string, string> * numnames,
+void SQLiteProfiler::create_distances_user_tree(vector<string> ifile_names, map<string, string> * numnames,
 		map<string, string> * namesnum/*, map<int, map<int,double> > * original_alignment_distances*/) {
 	//get the list of nodes for which distances are required
 	vector<Node *> nodesfordist;
@@ -452,23 +413,19 @@ void SQLiteProfiler::create_distances_user_tree(vector<string> ifile_names,
 			if (i == j) {
 				tdistance.push_back(UNDEF_DIST_SAME_ALN);
 			} else {
-				double distance = get_distance_between_two_nodes(
-						user_guide_tree, nodesfordist[i], nodesfordist[j]);
+				double distance = get_distance_between_two_nodes(user_guide_tree, nodesfordist[i], nodesfordist[j]);
 				tdistance.push_back(distance);
 			}
 		}
 		std::ostringstream stm;
 		stm << i;
-		numnames->insert(
-				pair<string, string>(stm.str(), nodesfordist[i]->getName()));
-		namesnum->insert(
-				pair<string, string>(nodesfordist[i]->getName(), stm.str()));
+		numnames->insert(pair<string, string>(stm.str(), nodesfordist[i]->getName()));
+		namesnum->insert(pair<string, string>(nodesfordist[i]->getName(), stm.str()));
 //	original_alignment_distances->push_back(tdistance);
 	}
 }
 
-void SQLiteProfiler::find_next_original_alignment_set_to_profile(
-		int * best_seed_alignment, vector<int> * closest_matches) {
+void SQLiteProfiler::find_next_original_alignment_set_to_profile(int * best_seed_alignment, vector<int> * closest_matches) {
 
 	/* This function uses the alignments from original_alignments_to_profile as
 	 * seeds to identify the taxonomically closest set of *all* original alignments
@@ -511,114 +468,166 @@ void SQLiteProfiler::find_next_original_alignment_set_to_profile(
 	}
 }
 
-void SQLiteProfiler::clean_alignment(string filename) {
+void SQLiteProfiler::clean_aligned_sequences(vector<Sequence> & seqs, float site_threshold, float seq_threshold) {
 
-	/* just cleaning the file that is there
-	 * 0.1 is the current limit
-	 * percent should be, if you are missing more than this, then remove, so 0.9 is now and 0.5 is genome removal
+	/*
+	 * removes columns from the alignment that have greater than
+	 * threshold proportion of missing data, and write the cleaned
+	 * sequences back into the alignment. the alignment is accepted
+	 * as a vector of Sequence objects that are **assumed** to be
+	 * aligned to one another. if the passed seqs are not all of
+	 * the same length, bad things will probably happen.
+	 *
+	 * TODO: also needs to be able to remove empty sequences themselves, but
+	 * we probably don't want to do this until the final alignment step.
+	 * currently we are just throwing obnoxious alerts when we find these.
+	 *
+	 * 0.5 is genome removal ...?
 	 */
 
-	double threshold = 0.9;
+	int seqlength = seqs[0].get_sequence().size();
+	float nseqs = float(seqs.size());
+	vector<int> cols_to_remove;
+
+	// find columns with too much missing data
+	for (int j = 0; j < seqlength; j++) {
+		int n_empty_cells = 0;
+
+		// get the number of sequences missing data for this site
+		for (int i = 0; i < seqs.size(); i++) {
+			char cell = seqs[i].get_aligned_seq()[j];
+			if (cell == '-' || cell == 'N' || cell == 'n')
+				n_empty_cells++;
+		}
+		// if we exceed the threshold, mark column for removal
+		double prop_missing = n_empty_cells / nseqs;
+		if (prop_missing > site_threshold)
+			cols_to_remove.push_back(j);
+	}
+
+	int n_removed_cols = cols_to_remove.size();
+
+	// now re-write the sequences, excluding the flagged columns
+	for (int i = 0; i < nseqs; i++) {
+		string clean_seq = "";
+		int n_empty_cells = 0;
+
+		// record each column if it is not in the excluded list
+		for (int j = 0; j < seqlength; j++) {
+			if (count(cols_to_remove.begin(), cols_to_remove.end(), j) == 0) {
+				char cell = seqs[i].get_sequence()[j];
+				clean_seq += cell;
+
+				// also count how much missing data the sequence itself contains
+				if (cell == '-' || cell == 'N' || cell == 'n')
+					n_empty_cells++;
+			}
+		}
+
+		// check if seq has too much missing data
+		// TODO: replace obnoxious alerts for with mechanism to record the sequences
+		if ((n_empty_cells / seqlength) > seq_threshold) {
+			if (n_empty_cells == seqlength)
+				cout << "\n!\n!\n!\n!\nsequence for " << seqs[i].get_taxon_name() << " is completely empty!\n!\n!\n!\n!" << endl;
+			else
+				cout << "\n!\n!\n!\n!\nsequence for " << seqs[i].get_taxon_name() << " contains greater than " << seq_threshold << " missing data!\n!\n!\n!\n!" << endl;
+		}
+
+		// record cleaned sequence
+		seqs[i].set_aligned_sequence(clean_seq);
+	}
+}
+
+void SQLiteProfiler::clean_alignment(string filename) {
+
+	/*
+	 * gathers sequences from an alignment file, passes them to
+	 * clean_aligned_seqs for cleaning, and the writes the clean
+	 * sequences out to another alignment.
+	 *
+	 * we use 0.9 as a default threshold for minimum column
+	 * occupancy in the profile alignments, to keep them from
+	 * getting unwieldy.
+	 */
+
+	double site_threshold = 0.9; // TODO: make these user-settable
+	double seq_threshold = 0.95;
 
 	// read the alignment into tempalseqs
 	FastaUtil fu;
 	vector<Sequence> tempalseqs;
-	fu.readFile(profile_dir_fname + filename, tempalseqs);
+	string aln_fname = profile_dir_fname + filename;
+	fu.read_aligned_fasta_into(tempalseqs, aln_fname);
 
-	cout << "cleaning seqs for " << filename << endl;
-	int seqlength = tempalseqs[0].get_sequence().size();
-	float nseqs = float(tempalseqs.size());
-	vector<int> cols_to_remove;
-
-	// for each column in the alignment
-	for (int j = 0; j < seqlength; j++) {
-		int gaps = 0;
-		char cell;
-		// get the number of sequences with missing data
-		for (int i = 0; i < tempalseqs.size(); i++) {
-			cell = tempalseqs[i].get_sequence()[j];
-			if (cell == '-' || cell == 'N' || cell == 'n')
-				gaps += 1;
-		}
-		// if we exceed the threshold, mark this column for removal
-		double prop_missing = gaps / nseqs;
-		if (prop_missing > threshold)
-			cols_to_remove.push_back(j);
-	}
-
-	// for each sequence
-	for (int i = 0; i < tempalseqs.size(); i++) {
-		string a;
-		// for each column
-		for (int j = 0; j < seqlength; j++) {
-			// record all columns not in the exclusion list
-			if (count(cols_to_remove.begin(), cols_to_remove.end(), j) == 0)
-				a += tempalseqs[i].get_sequence()[j];
-		}
-		// record cleaned sequence
-		tempalseqs[i].set_sequence(a);
-	}
+//	cout << "cleaning seqs in " << filename << endl;
+	clean_aligned_sequences(tempalseqs, site_threshold, seq_threshold);
 
 	// remove the input (dirty) file, replace it with the clean one
 	remove((profile_dir_fname + filename).c_str());
 	fu.writeFileFromVector(profile_dir_fname + filename, tempalseqs);
 }
 
-void SQLiteProfiler::clean_dbseqs(int alignid) {
-	double percent = 0.9;
+/* clean sequences from a profile alignment and write them back into the database */
+void SQLiteProfiler::clean_dbseqs(int profile_id) {
+
+	double site_threshold = 0.9; // TODO: make these user-settable
+	double seq_threshold = 0.95;
+
+	// get the sequences from the db
 	vector<Sequence> tempalseqs;
-	gene_db.get_profile_align_seqs(alignid, tempalseqs);
-	cout << "cleaning seqs" << endl;
-	int seqlength = tempalseqs[0].get_aligned_seq().size();
-	float fseql = float(tempalseqs.size());
-	vector<int> removeem;
-	for (int j = 0; j < seqlength; j++) {
-		int gaps = 0;
-		for (int i = 0; i < tempalseqs.size(); i++) {
-			if (tempalseqs[i].get_aligned_seq()[j] == '-'
-					|| tempalseqs[i].get_aligned_seq()[j] == 'N'
-					|| tempalseqs[i].get_aligned_seq()[j] == 'n')
-				gaps += 1;
-		}
-		double curp = gaps / fseql;
-		if (curp > percent) {
-			removeem.push_back(j);
-		}
-	}
-	for (int i = 0; i < tempalseqs.size(); i++) {
-		string a;
-		for (int j = 0; j < seqlength; j++) {
-			if (count(removeem.begin(), removeem.end(), j) == 0)
-				a += tempalseqs[i].get_aligned_seq()[j];
-		}
-		tempalseqs[i].set_aligned_seq(a);
-	}
-	gene_db.update_profile_align_seqs(alignid, tempalseqs);
+	gene_db.load_aligned_seqs_from_profile_alignment_into(tempalseqs, profile_id);
+
+	cout << "cleaning database seqs for profile " << profile_id << endl;
+	clean_aligned_sequences(tempalseqs, site_threshold, seq_threshold);
+
+	/* this should be the same as above,
+	 int seqlength = tempalseqs[0].get_aligned_seq().size();
+	 float fseql = float(tempalseqs.size());
+	 vector<int> removeem;
+	 for (int j = 0; j < seqlength; j++) {
+	 int gaps = 0;
+	 for (int i = 0; i < tempalseqs.size(); i++) {
+	 if (tempalseqs[i].get_aligned_seq()[j] == '-' || tempalseqs[i].get_aligned_seq()[j] == 'N' || tempalseqs[i].get_aligned_seq()[j] == 'n')
+	 gaps += 1;
+	 }
+	 double curp = gaps / fseql;
+	 if (curp > percent) {
+	 removeem.push_back(j);
+	 }
+	 }
+	 for (int i = 0; i < tempalseqs.size(); i++) {
+	 string a;
+	 for (int j = 0; j < seqlength; j++) {
+	 if (count(removeem.begin(), removeem.end(), j) == 0)
+	 a += tempalseqs[i].get_aligned_seq()[j];
+	 }
+	 tempalseqs[i].set_aligned_seq(a);
+	 } */
+
+	gene_db.update_profile_align_seqs(profile_id, tempalseqs);
 }
 
-/*
- * TODO: fix the orphans
+/* This does all the profile alignments.
+ *
+ * We keep track of original and profile alignments in two vectors:
+ * original_alignments_to_profile and intermediate_profile_alignments,
+ * which store the database ids of the alignments. Note that the
+ * original alignments in the database itself have already been copied
+ * into the profile_alignments table, so all the dbids in both of these
+ * vectors represent rows in the profile_alignments table in the db.
+ *
+ * We start with the closest pair of original alignments. From
+ * these we create a profile alignment, store it in
+ * intermediate_profile_alignments, and remove the original alignments
+ * from original_alignments_to_profile. Then we find the closest pair
+ * of remaining original alignments, and repeat this process until no
+ * original alignments remain. After this we cross-align all the profile
+ * alignments, adding each newly created profile to
+ * intermediate_profile_alignments and removing both its children, until
+ * only one profile alignment remains, which is our final alignment.
  */
 void SQLiteProfiler::do_profile_alignments(/*map<int, map<int,double> > original_alignment_distances*/) {
-
-	/* This does all the profile alignments.
-	 *
-	 * We keep track of original and profile alignments in two vectors:
-	 * original_alignments_to_profile and intermediate_profile_alignments,
-	 * which store the database ids of the alignments. Note that the
-	 * original alignments in the database itself have already been copied
-	 * into the profile_alignments table, so all the dbids in both of these
-	 * vectors represent rows in the profile_alignments table in the db.
-	 *
-	 * We start with the closest pair of original alignments. From these we
-	 * create a profile alignment, store it in intermediate_profile_alignments,
-	 * and remove the original alignments from original_alignments_to_profile.
-	 * Then we find the closest pair of remaining original alignments, and
-	 * repeat this process until no original alignments remain. After this we
-	 * cross-align all the profile alignments, adding each newly created profile
-	 * to intermediate_profile_alignments and removing both its children,
-	 * until only one profile alignment remains, which is our final alignment.
-	 */
+// TODO: fix the orphans - not sure what this means...
 
 	bool muscle = true;
 
@@ -629,98 +638,86 @@ void SQLiteProfiler::do_profile_alignments(/*map<int, map<int,double> > original
 
 	if (doing_update) {
 
-		original_alignments_to_profile = updated_original_alignment_dbids;
-		intermediate_profile_alignments = updated_profile_alignment_dbids;
+		original_alignments_to_profile = original_alignment_dbids_to_update;
+		intermediate_profile_alignments = profile_alignment_dbids_to_update;
 
-		cout << "original alignments remaining to profile: " << endl;
+		cout << "original alignments to be updated: " << endl;
 		for (int i = 0; i < original_alignments_to_profile.size(); i++)
 			cout << original_alignments_to_profile[i] << " ";
 		cout << endl;
 
-		cout << "intermediate profile alignments remaining to cross-align: ";
+		cout << "intermediate profile alignments to be updated: ";
 		for (int i = 0; i < intermediate_profile_alignments.size(); i++)
 			cout << intermediate_profile_alignments[i] << " ";
 		cout << endl;
 
 	} else
 		// not doing update; grab all the original alignments
-		original_alignments_to_profile.assign(original_alignment_dbids.begin(),
-				original_alignment_dbids.end());
+		original_alignments_to_profile.assign(original_alignment_dbids.begin(), original_alignment_dbids.end());
 
-	int current_matched_alignment;// reused by each iteration of the upcoming while loop
-	int last_profile_completed; // remember the last profile in case it is the final one
+	int current_matched_alignment;	// reused by each iteration of the upcoming while loop
+	int last_profile_completed; 	// remember the last profile in case it is the final one
 
 	while (original_alignments_to_profile.size() > 0) { // first, the original alignments
 
-		// find the closest equidistant set of remaining original alignments
+		// find the closest equidistant set of original alignments containing at least one unprofiled alignment
 		vector<int> * all_closest_matches = new vector<int>();
-		find_next_original_alignment_set_to_profile(&current_matched_alignment,
-				all_closest_matches);
+		find_next_original_alignment_set_to_profile(&current_matched_alignment, all_closest_matches);
 		int n_closest_matches = all_closest_matches->size();
 
-		// DEBUG
-		cout << "next original alignment to profile: "
-				<< current_matched_alignment << endl;
-		for (int i = 0; i < all_closest_matches->size(); i++) {
-			cout << "\tmatched " << all_closest_matches->at(i) << endl;
-		}
-		cout << "removing " << current_matched_alignment
-				<< " from original alignments to profile" << endl;
+		cout << "next original alignment to profile: " << current_matched_alignment << endl;
+		cout << "removing " << current_matched_alignment << " from original alignments to profile" << endl;
 
 		// don't profile current_matched_alignment against itself
 		remove_from_original_alignments_to_profile(current_matched_alignment);
 
 		if (n_closest_matches == 1) {
 			int best_original_match = all_closest_matches->at(0);
+			cout << "closest original alignment to " << current_matched_alignment << " is " << best_original_match << endl;
 
 			// will be the actual alignment that we use in the new profile
 			int best_match;
 			bool best_match_is_profiled;
+			int best_profiled_match = gene_db.get_deepest_profile_for_alignment(best_original_match);
 
-			int best_profiled_match = gene_db.get_deepest_profile_for_alignment(
-					best_original_match);
 			if (best_profiled_match == NOT_YET_PROFILED) { // use the original alignment itself
 				best_match = best_original_match;
 				best_match_is_profiled = false;
 
 			} else { // otherwise use the profile
+				cout << "alignment " << best_original_match << " has already been included in profile " << best_profiled_match << endl;
 				best_match = best_profiled_match;
 				best_match_is_profiled = true;
 			}
 
 			// make the new profile
-			cout << "profiling " << current_matched_alignment << " and "
-					<< best_match << endl;
-			int p = make_new_profile_alignment(current_matched_alignment,
-					best_match);
+			cout << "profiling " << current_matched_alignment << " and " << best_match << endl;
+			int p = make_new_profile_alignment(current_matched_alignment, best_match);
 
 			// remove best_match so we don't profile it again
 			if (best_match_is_profiled) {
-				cout << "removing " << best_match
-						<< " from intermediate profiles" << endl;
+				cout << "removing " << best_match << " from intermediate profiles" << endl << endl;
 				remove_from_intermediate_profiles(best_match);
 			} else {
-				cout << "removing " << best_match
-						<< " from original alignments to profile" << endl;
+				cout << "removing " << best_match << " from original alignments to profile" << endl << endl;
 				remove_from_original_alignments_to_profile(best_match);
 			}
 
 			last_profile_completed = p;
 
-		} else { // there is more than one equally closest alignment to current_matched_alignment
-
+		} else {
+			cout << "there are multiple equally close original alignments to " << current_matched_alignment << endl;
 			int first_profile_match = NOT_YET_PROFILED;
-//            bool found_profiled_match = false;
 
-			// walk the alignments in the list of equally closest matches...
+			// look for profiles containing any matched alignments
 			for (int j = 0; j < n_closest_matches; j++) {
-				// ...checking each to see if it has already been profiled
 				int m = all_closest_matches->at(j);
 				int this_match = gene_db.get_deepest_profile_for_alignment(m);
 				if (this_match != NOT_YET_PROFILED) {
-					// if we find one, stop looking
+
+					// if we find one, remember it and stop looking
 					first_profile_match = this_match;
-//                    found_profiled_match = true;
+					cout << "found a profile (" << first_profile_match << ") containing one of the closest matches (" << m << ")" << endl;
 					break;
 				}
 			}
@@ -728,16 +725,14 @@ void SQLiteProfiler::do_profile_alignments(/*map<int, map<int,double> > original
 			if (first_profile_match != NOT_YET_PROFILED) { // we found a profile to align to current_matched_alignment
 
 				// do the profile alignment, and remove the intermediate profile child alignment
-				cout << "profiling " << current_matched_alignment << " and "
-						<< first_profile_match << endl;
-				int p = make_new_profile_alignment(current_matched_alignment,
-						first_profile_match);
-				cout << "removing " << first_profile_match
-						<< " from intermediate profiles" << endl;
+				cout << "profiling " << current_matched_alignment << " and " << first_profile_match << endl;
+				int p = make_new_profile_alignment(current_matched_alignment, first_profile_match);
+				cout << "removing " << first_profile_match << " from intermediate profiles" << endl << endl;
 				remove_from_intermediate_profiles(first_profile_match);
 				last_profile_completed = p;
 
-			} else { // we did not find a profiled alignment in the set of closest matches
+			} else {
+				cout << "none of the closest matches have been profiled, using muscle to find the best one" << endl;
 
 				int best_original_match;
 				double best_score = -1;
@@ -745,6 +740,7 @@ void SQLiteProfiler::do_profile_alignments(/*map<int, map<int,double> > original
 				// find the alignment that scores highest against current_matched_profile
 				for (int j = 0; j < n_closest_matches; j++) {
 					int this_match = all_closest_matches->at(j);
+					cout << "scoring " << current_matched_alignment << " against " << this_match << endl;
 					make_muscle_profile(current_matched_alignment, this_match);
 					double score = get_muscle_spscore("TEMPOUT.PROFILE");
 					if (score > best_score) {
@@ -752,15 +748,13 @@ void SQLiteProfiler::do_profile_alignments(/*map<int, map<int,double> > original
 						best_original_match = this_match;
 					}
 				}
-//                current_closest_match = best_match;
+
+				cout << "best-scoring closest original alignment was " << best_original_match << endl;
 
 				// do the profile alignment, and remove the original child alignment
-				cout << "profiling " << current_matched_alignment << " and "
-						<< best_original_match << endl;
-				int p = make_new_profile_alignment(current_matched_alignment,
-						best_original_match);
-				cout << "removing " << best_original_match
-						<< " from original alignments to profile" << endl;
+				cout << "profiling " << current_matched_alignment << " and " << best_original_match << endl;
+				int p = make_new_profile_alignment(current_matched_alignment, best_original_match);
+				cout << "removing " << best_original_match << " from original alignments to profile" << endl << endl;
 				remove_from_original_alignments_to_profile(best_original_match);
 				last_profile_completed = p;
 			}
@@ -768,17 +762,27 @@ void SQLiteProfiler::do_profile_alignments(/*map<int, map<int,double> > original
 		delete all_closest_matches;
 	}
 
-	cout << "processing profile files" << endl;
-	for (int i = 0; i < intermediate_profile_alignments.size(); i++) {
-		cout << intermediate_profile_alignments[i] << endl;
+	cout << "now cross-aligning the profile alignments: ";
+	int n_profile_alignments = intermediate_profile_alignments.size();
+	for (int i = 0; i < n_profile_alignments; i++) {
+		if (i != 0 && i < n_profile_alignments)
+			cout << ", ";
+		cout << intermediate_profile_alignments[i];
 	}
+	cout << endl;
 
 	while (intermediate_profile_alignments.size() > 1) {
-		// TODO: choose the best, for now just choose any two
+
+		// TODO: ideally we should be choosing the best two profiles
+		// to cross-align first, but for now we are just grabbing
+		// whichever are at the top of the vector on each iteration
+
 		int aln1 = intermediate_profile_alignments[0];
 		int aln2 = intermediate_profile_alignments[1];
 
+		cout << "\nprofiling profiles " << aln1 << " and " << aln2 << endl;
 		int p = make_new_profile_alignment(aln1, aln2);
+		cout << "added profile " << p << " to profile alignments" << endl;
 		remove_from_intermediate_profiles(aln1);
 		remove_from_intermediate_profiles(aln2);
 
@@ -831,39 +835,45 @@ void SQLiteProfiler::make_muscle_profile(int aln1, int aln2) {
 	 * these files to muscle to profile align them. the resulting
 	 * alignment is stored in TEMPOUT.PROFILE. */
 
+	string child1_fname = profile_dir_fname + "TEMP1.PROFILE";
+	string child2_fname = profile_dir_fname + "TEMP2.PROFILE";
+	string profile_out_fname = profile_dir_fname + "TEMPOUT.PROFILE";
+	string muscle_out_fname = profile_dir_fname + "muscle.out";
+
 	// delete any previous temp alignment files
-	remove((profile_dir_fname + "TEMP1.PROFILE").c_str());
-	remove((profile_dir_fname + "TEMP2.PROFILE").c_str());
-	remove((profile_dir_fname + "TEMPOUT.PROFILE").c_str());
+	remove((child1_fname).c_str());
+	remove((child2_fname).c_str());
+	remove((profile_out_fname).c_str());
 
 	// write the child alignments to temp files
-	gene_db.write_profile_alignment_to_file(aln1,
-			profile_dir_fname + "TEMP1.profile");
-	gene_db.write_profile_alignment_to_file(aln2,
-			profile_dir_fname + "TEMP2.profile");
+	gene_db.write_profile_alignment_to_file(aln1, child1_fname);
+	gene_db.write_profile_alignment_to_file(aln2, child2_fname);
+
+	validate_file(child1_fname);
+	validate_file(child2_fname);
 
 	// build the muscle call
-	string cmd = "muscle -profile -maxmb 5000 -in1 ";
-	cmd += profile_dir_fname + "TEMP1.profile -in2 ";
-	cmd += profile_dir_fname + "TEMP2.profile -out ";
-	cmd += profile_dir_fname + "TEMPOUT.PROFILE 2> ";
-	cmd += profile_dir_fname + "muscle.out";
+	string cmd = "muscle -profile -maxmb 5000 -in1 "; // TODO: make this user-settable
+	cmd += child1_fname + " -in2 ";
+	cmd += child2_fname + " -out ";
+	cmd += profile_out_fname + " 2> ";
+	cmd += muscle_out_fname;
 
-	cout << "aligning" << endl;
-	cout << cmd << endl;
+//	cout << "aligning" << endl;
+//	cout << cmd << endl;
 
 	// call muscle to do profile alignment
 	system(cmd.c_str());
 
 	// if new profile alignment was not created, test will fail and program will exit
-	validate_outfile_exists(profile_dir_fname + "TEMPOUT.PROFILE");
+	string outfname = profile_dir_fname + "TEMPOUT.PROFILE";
+	validate_file(outfname);
 
 }
 
 string SQLiteProfiler::get_name_from_tax_id(string taxid) {
 	Database conn(source_db_fname);
-	string sql = "SELECT name FROM taxonomy WHERE ncbi_id = " + taxid
-			+ " AND name_class = 'scientific name'";
+	string sql = "SELECT name FROM taxonomy WHERE ncbi_id = " + taxid + " AND name_class = 'scientific name'";
 	Query query(conn);
 	query.get_result(sql);
 //	StoreQueryResult R = query.store();
@@ -877,13 +887,13 @@ string SQLiteProfiler::get_name_from_tax_id(string taxid) {
 }
 
 /*
- * rename the FINAL.aln.cln file to FINAL.aln.cln.rn using the table in ITS.gi
+ * rename the FINAL.aln.cln file to FINAL.aln.cln.rn using the table in the .gi file
  */
-void SQLiteProfiler::rename_final_alignment(int alignid) {
+void SQLiteProfiler::write_final_alignments(int alignid) {
 	string fn1 = gene_name + ".FINAL.aln.rn";
-	gene_db.write_profile_alignment_with_names_to_file(alignid, fn1, false);
+	gene_db.write_profile_alignment_to_file(alignid, fn1, FULL_METADATA);
 	fn1 = gene_name + ".FINAL.aln";
-	gene_db.write_profile_alignment_with_names_to_file(alignid, fn1, true);
+	gene_db.write_profile_alignment_to_file(alignid, fn1, NCBI_TAXON_IDS);
 }
 
 double SQLiteProfiler::get_muscle_spscore(string filename) {
@@ -894,7 +904,9 @@ double SQLiteProfiler::get_muscle_spscore(string filename) {
 	cmd += " -log ";
 	cmd += profile_dir_fname + "prlog 2> ";
 	cmd += profile_dir_fname + "muscle.out";
-	cout << cmd << endl;
+
+	//	cout << cmd << endl;
+
 	/*    FILE *fp = popen(cmd.c_str(), "r" );
 	 char buff[1000];
 	 while ( fgets( buff, sizeof buff, fp ) != NULL ) {//doesn't exit out
@@ -902,7 +914,9 @@ double SQLiteProfiler::get_muscle_spscore(string filename) {
 	 }
 	 pclose( fp );
 	 */
+
 	system(cmd.c_str());
+
 	//read file
 	double score = 0;
 	ifstream ifs((profile_dir_fname + "prlog").c_str());
@@ -922,16 +936,22 @@ double SQLiteProfiler::get_muscle_spscore(string filename) {
 	return score;
 }
 
-void SQLiteProfiler::validate_outfile_exists(string filename) {
-	/* test whether filename exists, if not, the
-	 * program will exit with an error */
+void SQLiteProfiler::validate_file(string & filename) {
+	/* tests whether filename exists and whether the file is non-empty.
+	 * if either check fails the program will exit with an error. */
 
-	struct stat filestatus;
-	stat(filename.c_str(), &filestatus);
-	cout << filestatus.st_size << " bytes\n";
-	if (int(filestatus.st_size) <= 64) {
-		cerr << "problem: empty file " << filename << " created" << endl;
-		exit(0);
+	ifstream ifile(filename.c_str());
+	if (ifile) {
+		struct stat filestatus;
+		stat(filename.c_str(), &filestatus);
+//		cout << filestatus.st_size << " bytes\n";
+		if (int(filestatus.st_size) <= 64) {
+			cerr << "problem: the file " << filename << " contains no data (" << filestatus.st_size << " bytes)" << endl;
+			exit(1);
+		}
+	} else {
+		cerr << "problem: file " << filename << " does not seem to exist" << endl;
+		exit(1);
 	}
 }
 
@@ -939,16 +959,23 @@ void SQLiteProfiler::validate_outfile_exists(string filename) {
  * assumes that the id of the seq is the sqlite id 
  */
 void SQLiteProfiler::match_and_add_profile_alignment_to_db(int profileid) {
+
+	// read in the last profile alignment
 	FastaUtil fu;
-	vector<Sequence> tempalseqs;
-	fu.readFile(profile_dir_fname + "TEMPOUT.PROFILE", tempalseqs);
-	vector<Sequence> seqs;
+	vector<Sequence> aligned_seqs;
+	string aln_fname = profile_dir_fname + "TEMPOUT.PROFILE";
+	fu.read_aligned_fasta_into(aligned_seqs, aln_fname);
+
+	/*	vector<Sequence> seqs;
 	for (int i = 0; i < tempalseqs.size(); i++) {
-		Sequence tseq(tempalseqs[i].get_id(), tempalseqs[i].get_sequence());
+		Sequence tseq = Sequence();
+		tseq.set_label(tempalseqs[i].get_label());
+		tseq.set_aligned_sequence(tempalseqs[i].get_sequence());
 		seqs.push_back(tseq);
-	}
-	cout << "adding sequences to profile alignment table" << endl;
-	gene_db.add_sequences_for_profile_alignment(profileid, seqs);
+	} */
+
+//	cout << "adding sequences to profile alignment table" << endl;
+	gene_db.add_sequences_for_profile_alignment(profileid, aligned_seqs);
 }
 
 //THIS WAS THE OLD quicktree based outlier removal

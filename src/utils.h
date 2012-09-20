@@ -53,7 +53,7 @@ void replaceAll(string& str, const string& from, const string& to);
 int get_swps3_score_and_rc_cstyle(SBMatrix mat, Sequence * inseq1, Sequence * inseq2);
 
 vector<string> query_mask(string url);
-void convert_to_phylip(string,string);
+void convert_fasta_to_phylip(string & fasta_fname, string & phylip_fname);
 void get_earliest_branch_representation(string ncbidb,string rootid, Tree * tree);
 vector<int> get_left_right_exclude(vector<int> * lefts, vector<int> * rights, vector<int> * exlefts, vector<int> * exrights);
 int get_distance_from_child_to_parent(string ncbidb, string child, string parent);

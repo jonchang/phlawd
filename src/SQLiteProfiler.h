@@ -58,8 +58,8 @@ private:
 	vector<string> original_alignment_names;		// ?
 	vector<int> original_alignment_dbids;			// db ids of the original alignments (not profiles)
 
-	vector<int> updated_original_alignment_dbids;	// used if we are doing an update run
-	vector<int> updated_profile_alignment_dbids;	// used if we are doing an update run
+	vector<int> original_alignment_dbids_to_update;		// used if we are doing an update run
+	vector<int> profile_alignment_dbids_to_update;		// used if we are doing an update run
 
 	vector<int> intermediate_profile_alignments;	// db ids of the profile alignments remaining to be cross-profiled
 	vector<int> original_alignments_to_profile;		// db ids of the original alignments remaining to be profiled
@@ -75,18 +75,20 @@ private:
 	vector<string> get_final_children(string id);
 	string get_right_one(vector<string> allids, Query & res);
 	vector<string> get_left_right_children(string id);
-	void create_distances(string clade_name);
+	void create_distances(/*string clade_name*/);
 	void create_distances_user_tree(vector<string> names, map<string, string> * numnames, map<string, string> * namesnum);
 	void find_next_original_alignment_set_to_profile(int * matched_alignment, vector<int> * closest_matches);
+	void clean_aligned_sequences(vector<Sequence> & seqs, float site_threshold, float seq_threshold);
 	void clean_alignment(string infile);
 	void clean_dbseqs(int alignid);
 	void do_profile_alignments();
 	string get_name_from_tax_id(string taxid);
-	void rename_final_alignment(int alignid);
+	void write_final_alignments(int alignid);
 	void make_muscle_profile(int aln1, int aln2);
 	double get_muscle_spscore(string filename);
 
-	void validate_outfile_exists(string filename);
+	void validate_file(string & filename); // TODO: this should probably go in some other class, like util or something
+
 	void match_and_add_profile_alignment_to_db(int profileid);
 
 	void remove_from_intermediate_profiles(int value);

@@ -60,6 +60,23 @@ inline std::string to_string (const T& t){
     return ss.str();
 }
 
+string SQLiteDBController::get_scientific_name_for_ncbi_taxon_id(int ncbi_tax_id) {
+
+	Database conn(db_name);
+	Query query(conn);
+
+	string sql = "select name from taxonomy where name_class == 'scientific name' and ncbi_id == ";
+	sql += to_string(ncbi_tax_id);
+	query.get_result(sql);
+
+	string taxon_name = "";
+
+	while (query.fetch_row())
+		taxon_name = query.getstr();
+
+	return taxon_name;
+}
+
 bool SQLiteDBController::initiate(){
     bool ret = true;
     //check to see if the database exists

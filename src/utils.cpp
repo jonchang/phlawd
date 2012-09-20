@@ -253,7 +253,7 @@ int get_swps3_score_and_rc_cstyle(SBMatrix mat,  Sequence * inseq1, Sequence * i
  * url = the input url
  * output = vector of the gi strings
  */
-vector<string> query_mask(string url){
+vector<string> query_mask(string & url){
     string systemcall = "curl "+url;
     systemcall += " > gbmask.downloaded";
     cout << systemcall << endl;
@@ -264,17 +264,17 @@ vector<string> query_mask(string url){
     return returngis;
 }
 
-void convert_to_phylip(string infile,string outfile){
+void convert_fasta_to_phylip(string & infile, string & outfile){
     FastaUtil fu;
     vector<Sequence> tseqs;
-    fu.readFile(infile,tseqs);
+    fu.read_aligned_fasta_into(tseqs, infile);
     ofstream ofile(outfile.c_str());
     ofile << tseqs.size()<<"\t" <<tseqs[0].get_sequence().size() << endl;
     for (int i=0;i<tseqs.size();i++){
-	ofile << tseqs[i].get_id() << "\t"<<tseqs[i].get_sequence() << endl;
+//	ofile << tseqs[i].get_label() << "\t"<<tseqs[i].get_sequence() << endl; // this might break using the new sequence objects. simplifying it...
+    ofile << tseqs[i].get_taxon_name() << "\t" << tseqs[i].get_sequence() << endl;
     }
     ofile.close();
-    
 }
 
 /*

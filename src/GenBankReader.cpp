@@ -135,7 +135,7 @@ void GenBankReader::parse_file(string fl, string db_name){
 				deposit = false;
 		//	exit(0);
 		    }
-		    string sql = "insert into sequence (ncbi_id,accession_id,identifier,description,seq) values (";
+		    string sql = "insert into sequence (ncbi_id, accession_id, identifier, description, seq) values (";
 		    sql += taxid+",'";
 		    sql += locus+"','";
 		    sql += gin+"','";

@@ -47,6 +47,7 @@ public:
     SQLiteDBController(string dbn);
     bool initiate();
     void load_seqs(string div,bool downl);
+    string get_scientific_name_for_ncbi_taxon_id(int ncbi_tax_id);
 };
 
 #endif /* SQLITEDBCONTROLLER_H_ */

@@ -255,10 +255,10 @@ int main(int argc, char* argv[]){
 	    if(asse == true){
 		cout << "assembly" << endl;
 		SQLiteConstructor * a;
-		a = new SQLiteConstructor(clade, search,searchliteral,gene,genedb,mad,coverage,identity,db,knownfile,useITS, numthreads,automated,updateDB,updatef);
+		a = new SQLiteConstructor(clade, search, searchliteral, gene, genedb, mad, coverage, identity, db, knownfile, useITS, numthreads, automated, updateDB, updatef);
 		cout << "number of threads: " << a->get_numthreads() << endl;
 		omp_set_num_threads(a->get_numthreads());
-		cout << "clade name: " << a->get_cladename() << endl;
+		cout << "search clade: " << a->get_cladename() << endl;
 		for(int i=0;i<a->get_search().size(); i++){
 		    cout << "search: " << a->get_search()[i] << endl;
 		}
@@ -344,7 +344,9 @@ int main(int argc, char* argv[]){
 		string treefile;
 		if(outliertreecalculated == false){
 		    cout << "converting "<< gene <<".FINAL.aln to phylip format for tree building"<<   endl;
-		    convert_to_phylip((gene+".FINAL.aln"),(gene+".FINAL.phy"));
+		    string fasta_fname = gene + ".FINAL.aln";
+		    string phylip_fname = gene + ".FINAL.phy";
+		    convert_fasta_to_phylip(fasta_fname, phylip_fname);
 		    cout << "constructing a tree for detection" << endl;
 		    remove(("RAxML_info."+gene+".outlierdet").c_str());
 		    string treerunstr = "raxmlHPC-PTHREADS-SSE3 -T "+int_to_string(numthreads)+" -p 12345 -m GTRCAT -c 8 -s "+(gene+".FINAL.phy")+" -n "+gene+".outlierdet";
