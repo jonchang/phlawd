@@ -1173,7 +1173,7 @@ vector<Sequence> SQLiteConstructor::exclude_names_from_file(vector<Sequence>& se
 	vector<string> exclude_taxa;
 
 	while (getline(ifs, line)) {
-		TrimSpaces(line);
+//		TrimSpaces(line); // don't want to trim spaces because we want to be able to isolate words as search terms
 		exclude_taxa.push_back(line);
 	}
 
