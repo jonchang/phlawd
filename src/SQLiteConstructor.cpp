@@ -952,7 +952,7 @@ vector<Sequence> SQLiteConstructor::use_only_names_from_file(vector<Sequence> & 
 			break;
 		}
 		int this_tax_id = atoi(taxa_ids->at(i).c_str());
-		cout << dbc.get_scientific_name_for_ncbi_taxon_id(this_tax_id);
+		cout << dbc.get_sci_name_for_ncbi_tax_id(this_tax_id);
 	}
 	cout << endl;
 
@@ -1079,7 +1079,7 @@ Sequence SQLiteConstructor::find_best_exemplar_for_higher_taxon(string higher_ta
 	 * exemplar for this higher taxon. */
 
 	SQLiteDBController dbc = SQLiteDBController(db);
-	string higher_taxon_name = dbc.get_scientific_name_for_ncbi_taxon_id(atoi(higher_taxon_id.c_str()));
+	string higher_taxon_name = dbc.get_sci_name_for_ncbi_tax_id(atoi(higher_taxon_id.c_str()));
 
 	// find the seqs in the all_seqs vector that are within this higher taxon
 	vector<string> child_tax_ids = get_valid_ncbi_child_taxon_ids_for_parent_id(higher_taxon_id);
@@ -1191,7 +1191,7 @@ vector<Sequence> SQLiteConstructor::exclude_names_from_file(vector<Sequence>& se
 			break;
 		}
 
-		cout << exclude_taxa[i];
+		cout << "'" << exclude_taxa[i] << "'";
 	}
 	cout << endl;
 
@@ -1216,7 +1216,7 @@ vector<Sequence> SQLiteConstructor::exclude_names_from_file(vector<Sequence>& se
 		query1.free_result();
 	}
 
-	cout << "sequences will be filtered against " << taxa_ids->size() << " taxon names" << endl;
+	cout << "found " << taxa_ids->size() << " taxon names that will be excluded" << endl;
 	ifs.close();
 	//end read file
 	vector<Sequence> seqs_fn;
@@ -1513,7 +1513,7 @@ void SQLiteConstructor::reduce_genomes(vector<Sequence> * keep_seqs) {
 	}
 	for (unsigned int i = 0; i < keep_seqs->size(); i++) {
 		if (keep_seqs->at(i).get_sequence().size() > shrinkablethreshold) { // TODO: make this user-settable
-			cout << "sequence for " << keep_seqs->at(i).get_taxon_name() << " is longer than " << shrinkablethreshold << ". it will be shrunk " << endl;
+			cout << "sequence for " << keep_seqs->at(i).get_taxon_name() << " (gi " << keep_seqs->at(i).get_ncbi_gi_number() << ") " << " is longer than " << shrinkablethreshold << ". it will be shrunk " << endl;
 			Sequence tseq = keep_seqs->at(i);
 			double maxiden = 0;
 			int maxknown = 0;
@@ -2375,7 +2375,7 @@ void SQLiteConstructor::saturation_tests(vector<string> taxon_ids_to_be_tested, 
 			// get info about the best matching alignment for this leftover
 			int best_aln_for_this_leftover = original_alignments_added[best_match];
 			string best_aln_db_name = gene_db.get_original_alignment_name_for_db_id(best_aln_for_this_leftover);
-			string best_aln_tax_name = dbc.get_scientific_name_for_ncbi_taxon_id(atoi(best_aln_db_name.c_str()));
+			string best_aln_tax_name = dbc.get_sci_name_for_ncbi_tax_id(atoi(best_aln_db_name.c_str()));
 
 			cout << "adding leftover seq for " << this_leftover.get_taxon_name();
 			if (this_leftover.is_user_seq())

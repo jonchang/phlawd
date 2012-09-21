@@ -399,7 +399,7 @@ void SQLiteProfiler::create_distances(/*string clade_name,map<int, map<int,doubl
 		}
 		(/***/original_alignment_distances)[(*it).first] = tdistance;
 		int this_ncbi_id = atoi(((*it).second).c_str());
-		cout << "distances complete: " << dbc.get_scientific_name_for_ncbi_taxon_id(this_ncbi_id) << " (alignment " << (*it).first << ")" << endl;
+		cout << "distances complete: " << dbc.get_sci_name_for_ncbi_tax_id(this_ncbi_id) << " (alignment " << (*it).first << ")" << endl;
 	}
 }
 
@@ -636,6 +636,7 @@ void SQLiteProfiler::clean_dbseqs(int profile_id) {
 void SQLiteProfiler::do_profile_alignments(/*map<int, map<int,double> > original_alignment_distances*/) {
 // TODO: fix the orphans - not sure what this means...
 
+	SQLiteDBController dbc(source_db_fname);
 	bool muscle = true;
 
 	// commented this out because the log file never seems to be used
@@ -662,44 +663,44 @@ void SQLiteProfiler::do_profile_alignments(/*map<int, map<int,double> > original
 		// not doing update; grab all the original alignments
 		original_alignments_to_profile.assign(original_alignment_dbids.begin(), original_alignment_dbids.end());
 
-	int current_matched_alignment;	// reused by each iteration of the upcoming while loop
+	int cur_matched_align;	// reused by each iteration of the upcoming while loop
 	int last_profile_completed; 	// remember the last profile in case it is the final one
 
 	while (original_alignments_to_profile.size() > 0) { // first, the original alignments
 
 		// find the closest equidistant set of original alignments containing at least one unprofiled alignment
 		vector<int> * all_closest_matches = new vector<int>();
-		find_next_original_alignment_set_to_profile(&current_matched_alignment, all_closest_matches);
+		find_next_original_alignment_set_to_profile(&cur_matched_align, all_closest_matches);
 		int n_closest_matches = all_closest_matches->size();
 
-		cout << "next original alignment to profile: " << current_matched_alignment << endl;
-		cout << "removing " << current_matched_alignment << " from original alignments to profile" << endl;
+		cout << "next original alignment to profile: " << cur_matched_align << endl;
+		cout << "removing " << cur_matched_align << " from original alignments to profile" << endl;
 
-		// don't profile current_matched_alignment against itself
-		remove_from_original_alignments_to_profile(current_matched_alignment);
+		// don't profile cur_matched_align against itself
+		remove_from_original_alignments_to_profile(cur_matched_align);
 
 		if (n_closest_matches == 1) {
-			int best_original_match = all_closest_matches->at(0);
-			cout << "closest original alignment to " << current_matched_alignment << " is " << best_original_match << endl;
+			int best_orig_match = all_closest_matches->at(0);
+			cout << "closest original alignment to " << cur_matched_align << " is " << best_orig_match << endl;
 
 			// will be the actual alignment that we use in the new profile
 			int best_match;
 			bool best_match_is_profiled;
-			int best_profiled_match = gene_db.get_deepest_profile_for_alignment(best_original_match);
+			int best_profiled_match = gene_db.get_deepest_profile_for_alignment(best_orig_match);
 
 			if (best_profiled_match == NOT_YET_PROFILED) { // use the original alignment itself
-				best_match = best_original_match;
+				best_match = best_orig_match;
 				best_match_is_profiled = false;
 
 			} else { // otherwise use the profile
-				cout << "alignment " << best_original_match << " has already been included in profile " << best_profiled_match << endl;
+				cout << "alignment " << best_orig_match << " has already been included in profile " << best_profiled_match << endl;
 				best_match = best_profiled_match;
 				best_match_is_profiled = true;
 			}
 
 			// make the new profile
-			cout << "profiling " << current_matched_alignment << " and " << best_match << endl;
-			int p = make_new_profile_alignment(current_matched_alignment, best_match);
+			cout << "profiling " << cur_matched_align << " and " << best_match << endl;
+			int p = make_new_profile_alignment(cur_matched_align, best_match);
 
 			// remove best_match so we don't profile it again
 			if (best_match_is_profiled) {
@@ -713,7 +714,7 @@ void SQLiteProfiler::do_profile_alignments(/*map<int, map<int,double> > original
 			last_profile_completed = p;
 
 		} else {
-			cout << "there are multiple equally close original alignments to " << current_matched_alignment << endl;
+			cout << "there are multiple equally close original alignments to " << cur_matched_align << endl;
 			int first_profile_match = NOT_YET_PROFILED;
 
 			// look for profiles containing any matched alignments
@@ -729,11 +730,11 @@ void SQLiteProfiler::do_profile_alignments(/*map<int, map<int,double> > original
 				}
 			}
 
-			if (first_profile_match != NOT_YET_PROFILED) { // we found a profile to align to current_matched_alignment
+			if (first_profile_match != NOT_YET_PROFILED) { // we found a profile to align to cur_matched_align
 
 				// do the profile alignment, and remove the intermediate profile child alignment
-				cout << "profiling " << current_matched_alignment << " and " << first_profile_match << endl;
-				int p = make_new_profile_alignment(current_matched_alignment, first_profile_match);
+				cout << "profiling " << cur_matched_align << " and " << first_profile_match << endl;
+				int p = make_new_profile_alignment(cur_matched_align, first_profile_match);
 				cout << "removing " << first_profile_match << " from intermediate profiles" << endl << endl;
 				remove_from_intermediate_profiles(first_profile_match);
 				last_profile_completed = p;
@@ -741,28 +742,28 @@ void SQLiteProfiler::do_profile_alignments(/*map<int, map<int,double> > original
 			} else {
 				cout << "none of the closest matches have been profiled, using muscle to find the best one" << endl;
 
-				int best_original_match;
+				int best_orig_match;
 				double best_score = -1;
 
 				// find the alignment that scores highest against current_matched_profile
 				for (int j = 0; j < n_closest_matches; j++) {
 					int this_match = all_closest_matches->at(j);
-					cout << "scoring " << current_matched_alignment << " against " << this_match << endl;
-					make_muscle_profile(current_matched_alignment, this_match);
+					cout << "scoring " << cur_matched_align << " against " << this_match << endl;
+					make_muscle_profile(cur_matched_align, this_match);
 					double score = get_muscle_spscore("TEMPOUT.PROFILE");
 					if (score > best_score) {
 						best_score = score;
-						best_original_match = this_match;
+						best_orig_match = this_match;
 					}
 				}
 
-				cout << "best-scoring closest original alignment was " << best_original_match << endl;
+				cout << "best-scoring closest original alignment was " << best_orig_match << endl;
 
 				// do the profile alignment, and remove the original child alignment
-				cout << "profiling " << current_matched_alignment << " and " << best_original_match << endl;
-				int p = make_new_profile_alignment(current_matched_alignment, best_original_match);
-				cout << "removing " << best_original_match << " from original alignments to profile" << endl << endl;
-				remove_from_original_alignments_to_profile(best_original_match);
+				cout << "profiling " << cur_matched_align << " and " << best_orig_match << endl;
+				int p = make_new_profile_alignment(cur_matched_align, best_orig_match);
+				cout << "removing " << best_orig_match << " from original alignments to profile" << endl << endl;
+				remove_from_original_alignments_to_profile(best_orig_match);
 				last_profile_completed = p;
 			}
 		}
@@ -897,8 +898,10 @@ string SQLiteProfiler::get_name_from_tax_id(string taxid) {
  * rename the FINAL.aln.cln file to FINAL.aln.cln.rn using the table in the .gi file
  */
 void SQLiteProfiler::write_final_alignments(int alignid) {
-	string fn1 = gene_name + ".FINAL.aln.rn";
+	string fn1 = gene_name + ".FINAL.aln.full";
 	gene_db.write_profile_alignment_to_file(alignid, fn1, FULL_METADATA);
+	fn1 = gene_name + ".FINAL.aln.rn";
+	gene_db.write_profile_alignment_to_file(alignid, fn1, TAXON_NAMES);
 	fn1 = gene_name + ".FINAL.aln";
 	gene_db.write_profile_alignment_to_file(alignid, fn1, NCBI_TAXON_IDS);
 }

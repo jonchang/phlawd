@@ -62,7 +62,7 @@ inline std::string to_string (const T& t){
     return ss.str();
 }
 
-string SQLiteDBController::get_scientific_name_for_ncbi_taxon_id(int ncbi_tax_id) {
+string SQLiteDBController::get_sci_name_for_ncbi_tax_id(int ncbi_tax_id) {
 
 	Database conn(db_name);
 	Query query(conn);
