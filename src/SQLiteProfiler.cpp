@@ -44,6 +44,7 @@ using namespace std;
 #include "tree_reader.h"
 #include "sequence.h"
 #include "fasta_util.h"
+#include "SQLiteDBController.h"
 
 #include "utils.h"
 
@@ -157,7 +158,7 @@ void SQLiteProfiler::run() {
 			create_distances(/*clade_name*/); // TODO: need to make sure that removing this function argument didn't break the updates or something. look for every call to this function and see what it does
 		}
 		//start profiling
-		cout << "profiling" << endl;
+		cout << "\nprofiling\n" << endl;
 		do_profile_alignments(/*original_alignment_distances*/); // TODO: need to make sure that removing this function argument didn't break the updates or something. look for every call to this function and see what it does
 //		finalaln
 	} else {
@@ -340,6 +341,11 @@ void SQLiteProfiler::create_distances(/*string clade_name,map<int, map<int,doubl
 //    for(int i=0;i<names.size();i++){
 	map<int, string>::iterator it;
 	for (it = profile_id_name_map.begin(); it != profile_id_name_map.end(); it++) {
+
+		// TODO: should turn database controller class into source db class, include functions
+		// for dealing with all source db queries there, so we don't have to do them here.
+		SQLiteDBController dbc(source_db_fname);
+
 		Database conn(source_db_fname);
 		//change to ncbi id
 		sql = "SELECT ncbi_id FROM taxonomy WHERE ncbi_id = " + (*it).second + ";";    //names[i]+";";
@@ -392,7 +398,8 @@ void SQLiteProfiler::create_distances(/*string clade_name,map<int, map<int,doubl
 			}
 		}
 		(/***/original_alignment_distances)[(*it).first] = tdistance;
-		cout << "distances complete: " << (*it).second << " " << (*it).first << endl;
+		int this_ncbi_id = atoi(((*it).second).c_str());
+		cout << "distances complete: " << dbc.get_scientific_name_for_ncbi_taxon_id(this_ncbi_id) << " (alignment " << (*it).first << ")" << endl;
 	}
 }
 
@@ -780,7 +787,7 @@ void SQLiteProfiler::do_profile_alignments(/*map<int, map<int,double> > original
 		int aln1 = intermediate_profile_alignments[0];
 		int aln2 = intermediate_profile_alignments[1];
 
-		cout << "\nprofiling profiles " << aln1 << " and " << aln2 << endl;
+		cout << "\nprofiling " << aln1 << " and " << aln2 << endl;
 		int p = make_new_profile_alignment(aln1, aln2);
 		cout << "added profile " << p << " to profile alignments" << endl;
 		remove_from_intermediate_profiles(aln1);

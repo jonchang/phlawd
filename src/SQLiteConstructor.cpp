@@ -89,7 +89,9 @@ SQLiteConstructor::SQLiteConstructor(
 		int numt,
 		bool autom,
 		bool inupdatedb,
-		string inupdatefile) :
+		string inupdatefile,
+		bool assignleft,
+		int shrinkthresh) :
 				clade_name(cn),
 				search(searchstr),
 				searchliteral(searchlit),
@@ -103,7 +105,9 @@ SQLiteConstructor::SQLiteConstructor(
 				numthreads(numt),
 				automated(autom),
 				updateDB(inupdatedb),
-				userfasta(false) {
+				userfasta(false),
+				assignleftovers(assignleft),
+				shrinkablethreshold(shrinkthresh) {
 
 	FastaUtil seqReader;
 	//added updating seqs from db
@@ -427,30 +431,30 @@ int SQLiteConstructor::run() {
 
 		// filter out any sequences that matched the search criteria but are not within the search clade
 		filtered_starting_seqs = make_seqs_from_seq_tuples_for_taxon(search_clade_id, all_seqs_matching_search);
-		cout << "found " << filtered_starting_seqs.size() << " matching sequences in the source db" << endl;
+		cout << "\nfound " << filtered_starting_seqs.size() << " matching sequences in the source db" << endl << endl;
 
 		if (excludegifromfile == true) { // if excluding gi's from file, filter against those
 			filtered_starting_seqs = exclude_gis_from_file(filtered_starting_seqs);
-			cout << "after excluding gis in the gi's to exclude file: " << filtered_starting_seqs.size() << endl;
+			cout << "after excluding gis in the gis to exclude file: " << filtered_starting_seqs.size() << endl << endl;
 		}
 
 		if (includegifromfile == true) { // if including gi's from file, add those
 			filtered_starting_seqs = include_gis_from_file(filtered_starting_seqs);
-			cout << "after including gis in the gi's to include file: " << filtered_starting_seqs.size() << endl;
+			cout << "after including gis in the gis to include file: " << filtered_starting_seqs.size() << endl << endl;
 		}
 
 		if (onlynamesfromfile == true) { // if only using the names from a list, filter against the list
 			filtered_starting_seqs = use_only_names_from_file(filtered_starting_seqs);
-			cout << "after filtering taxa not in the include file: " << filtered_starting_seqs.size() << endl;
+			cout << "after filtering taxa not in the include file: " << filtered_starting_seqs.size() << endl << endl;
 		}
 
 		if (excludenamesfromfile == true) { // if excluding names from file, filter them out
 			filtered_starting_seqs = exclude_names_from_file(filtered_starting_seqs);
-			cout << "after filtering taxa in the exclude file: " << filtered_starting_seqs.size() << endl;
+			cout << "after filtering against search terms in the exclude file: " << filtered_starting_seqs.size() << endl << endl;
 		}
 
 		if (filtered_starting_seqs.size() == 0) {
-			cout << "there were no seqs left after the filtering" << endl;
+			cout << "there were no seqs left after the filtering steps. phlawd will exit" << endl;
 			exit(0);
 		}
 	}    // end skipsearch == false
@@ -480,7 +484,7 @@ int SQLiteConstructor::run() {
 	// get rid of duplicates
 	remove_duplicates_SWPS3(seqs_to_align);
 	int n_seqs_unique = seqs_to_align->size();
-	cout << "removed " << n_seqs_passing_swps3 - n_seqs_unique << " taxonomic duplicates, leaving " << n_seqs_unique << " seqs to be aligned" << endl;
+	cout << "removed " << n_seqs_passing_swps3 - n_seqs_unique << " taxonomic duplicates, leaving " << n_seqs_unique << " seqs to be aligned" << endl << endl;
 
 	// if userguidetree overlaps less than a certain percentage, usertree = false
 	if (usertree == true && userskipsearchdb == false) {
@@ -702,6 +706,7 @@ int SQLiteConstructor::run() {
 	} // end update prep
 
 	// saturation tests
+	cout << "starting saturation tests: identifying original clades to align before profiling" << endl;
 	if (updateDB == true) {
 		saturation_tests(search_clade_tax_ids, search_clade_tax_names, seqs_to_align);
 	} else {
@@ -902,10 +907,14 @@ vector<Sequence> SQLiteConstructor::make_seqs_from_seq_tuples_for_taxon(int taxo
 }
 
 /*
- * this take the literal name from the file so this should be prefiltered
+ * this takes the literal name from the file so this should be prefiltered
  * to be something that ncbi will match with the names not the edited names
  */
 vector<Sequence> SQLiteConstructor::use_only_names_from_file(vector<Sequence> & seqs) {
+
+	// TODO: clean this up...
+
+	SQLiteDBController dbc = SQLiteDBController(db);
 	Database conn(db);
 	vector<string> * taxa = new vector<string>();
 	vector<string> * taxa_ids = new vector<string>();
@@ -925,12 +934,32 @@ vector<Sequence> SQLiteConstructor::use_only_names_from_file(vector<Sequence> & 
 		}
 		query1.free_result();
 	}
-	cout << taxa_ids->size() << endl;
+
+	if (containswild)
+		cout << "taxa (including all children) to be included: ";
+	else
+		cout << "exact taxon names to be matched (not including children): ";
+
+	// just print a list of the names we're searching
+	bool first = true;
+	for (int i = 0; i < taxa_ids->size(); i++) {
+		if (first)
+			first = false;
+		else
+			cout << ", ";
+		if (i > 30) {
+			cout << "...";
+			break;
+		}
+		int this_tax_id = atoi(taxa_ids->at(i).c_str());
+		cout << dbc.get_scientific_name_for_ncbi_taxon_id(this_tax_id);
+	}
+	cout << endl;
+
 	/*
 	 * the adding of wild taxa (this will add ALL the children of the names in the list file)
 	 */
 	if (containswild == true) {
-		cout << "this file contains higher taxa" << endl;
 		vector<string> new_ids;
 		for (int i = 0; i < taxa_ids->size(); i++) {
 			//first get the left and right value for the taxa
@@ -963,12 +992,11 @@ vector<Sequence> SQLiteConstructor::use_only_names_from_file(vector<Sequence> & 
 			taxa_ids->push_back(new_ids[i]);
 		}
 	}
-	cout << taxa_ids->size() << endl;
 	/*
 	 * end of the wild taxa
 	 */
 
-	cout << taxa_ids->size() << " names in the file" << endl;
+	cout << "sequences will be filtered against " << taxa_ids->size() << " taxon names" << endl;
 	ifs.close();
 	//end read file
 	vector<Sequence> seqs_fn;
@@ -983,6 +1011,9 @@ vector<Sequence> SQLiteConstructor::use_only_names_from_file(vector<Sequence> & 
 	 * added for higher taxa
 	 */
 	if (containshigher == true && containswild == false) {
+
+		// TODO: what does this do? need to clarify output...
+
 		cout << "this file contains higher taxa" << endl;
 		for (int i = 0; i < taxa_ids->size(); i++) {
 			string sql = "SELECT ncbi_id FROM taxonomy WHERE parent_ncbi_id = " + taxa_ids->at(i) + " and name_class = 'scientific name';";
@@ -1131,21 +1162,49 @@ Sequence SQLiteConstructor::find_best_exemplar_for_higher_taxon(string higher_ta
  * excluding taxa from sequences
  */
 vector<Sequence> SQLiteConstructor::exclude_names_from_file(vector<Sequence>& seqs) {
+
+	// TODO: clean this up...
+
 	Database conn(db);
 	vector<string> * taxa_ids = new vector<string>();
 	//read file
 	ifstream ifs(excludefilename.c_str());
 	string line;
+	vector<string> exclude_taxa;
+
 	while (getline(ifs, line)) {
 		TrimSpaces(line);
-		string sql;
-		if (line[0] == '*') { //this indicates a wildcard and will ignore any taxa with this in the name
-			string trimline = line.substr(1, line.size());
-			sql = "SELECT ncbi_id FROM taxonomy WHERE left_value > " + int_to_string(main_left) + " AND right_value < " + int_to_string(main_right)
-					+ " AND name like '%" + trimline + "%'  and name_class == 'scientific name'";
-		} else {
+		exclude_taxa.push_back(line);
+	}
 
-			sql = "SELECT ncbi_id FROM taxonomy WHERE name = '" + line + "'";
+	// just print a list of the names we're searching
+	bool first = true;
+	cout << "search terms for taxon names to be excluded (not including children): ";
+	for (int i = 0; i < exclude_taxa.size(); i++) {
+		if (first)
+			first = false;
+		else
+			cout << ", ";
+
+		if (i > 30) {
+			cout << "...";
+			break;
+		}
+
+		cout << exclude_taxa[i];
+	}
+	cout << endl;
+
+	while (exclude_taxa.empty() == false) {
+		string name = exclude_taxa.back();
+		exclude_taxa.pop_back();
+		string sql;
+		if (name[0] == '*') { //this indicates a wildcard and will ignore any taxa with this in the name
+			string name_trimmed = name.substr(1, name.size());
+			sql = "SELECT ncbi_id FROM taxonomy WHERE left_value > " + int_to_string(main_left) + " AND right_value < " + int_to_string(main_right)
+					+ " AND name like '%" + name_trimmed + "%'  and name_class == 'scientific name'";
+		} else {
+			sql = "SELECT ncbi_id FROM taxonomy WHERE name = '" + name + "'";
 		}
 		Query query1(conn);
 		query1.get_result(sql);
@@ -1156,7 +1215,8 @@ vector<Sequence> SQLiteConstructor::exclude_names_from_file(vector<Sequence>& se
 		}
 		query1.free_result();
 	}
-	cout << taxa_ids->size() << " names in the file" << endl;
+
+	cout << "sequences will be filtered against " << taxa_ids->size() << " taxon names" << endl;
 	ifs.close();
 	//end read file
 	vector<Sequence> seqs_fn;
@@ -1256,6 +1316,7 @@ void SQLiteConstructor::get_best_hits_openmp_SWPS3_justquery(vector<Sequence> & 
 	vector<int> known_scores;
 	SBMatrix mat = swps3_readSBMatrix("EDNAFULL");
 	//SBMatrix mat = swps3_get_premade_SBMatrix( "EDNAFULL" );
+
 	for (int i = 0; i < known_seqs->size(); i++) {
 		known_scores.push_back(get_swps3_score_and_rc_cstyle(mat, &known_seqs->at(i), &known_seqs->at(i)));
 	}
@@ -1263,6 +1324,7 @@ void SQLiteConstructor::get_best_hits_openmp_SWPS3_justquery(vector<Sequence> & 
 	vector<double> justqueryvec;
 	vector<double> justqueryvec2;
 	vector<string> justqueryname;
+
 #pragma omp parallel for shared(keep_seqs_rc_map,justqueryvec,justqueryvec2,justqueryname)
 	for (int i = 0; i < seqs_to_score.size(); i++) {
 		double maxide = 0;
@@ -1450,8 +1512,8 @@ void SQLiteConstructor::reduce_genomes(vector<Sequence> * keep_seqs) {
 		scores.push_back(get_swps3_score_and_rc_cstyle(mat, &known_seqs->at(j), &known_seqs->at(j)));
 	}
 	for (unsigned int i = 0; i < keep_seqs->size(); i++) {
-		if (keep_seqs->at(i).get_sequence().size() > SHRINKABLE_THRESHOLD) { // TODO: make this user-settable
-			cout << "shrinking a genome: " << keep_seqs->at(i).get_taxon_name() << endl;
+		if (keep_seqs->at(i).get_sequence().size() > shrinkablethreshold) { // TODO: make this user-settable
+			cout << "sequence for " << keep_seqs->at(i).get_taxon_name() << " is longer than " << shrinkablethreshold << ". it will be shrunk " << endl;
 			Sequence tseq = keep_seqs->at(i);
 			double maxiden = 0;
 			int maxknown = 0;
@@ -1463,7 +1525,7 @@ void SQLiteConstructor::reduce_genomes(vector<Sequence> * keep_seqs) {
 					maxknown = j;
 				}
 			}
-			const string tempfile = genefoldername + "genome_shrink";
+			const string tempfile = genefoldername + "genome_shrink_in";
 			vector<Sequence> sc1;
 			FastaUtil seqwriter;
 			sc1.push_back(keep_seqs->at(i));
@@ -1472,10 +1534,10 @@ void SQLiteConstructor::reduce_genomes(vector<Sequence> * keep_seqs) {
 			//}
 			seqwriter.writeFileFromVector(tempfile, sc1);
 			string cmd = "mafft ";
-			cmd += genefoldername + "genome_shrink > ";
-			cmd += genefoldername + "genome_shrink_aln";
-			cout << cmd << endl;
-			cout << "aligning" << endl;
+			cmd += genefoldername + "genome_shrink_in > ";
+			cmd += genefoldername + "genome_shrink_aln 2> genome_shrink.mafftlog";
+//			cout << cmd << endl;
+			cout << "using mafft to align the genome to a known sequence" << endl;
 			system(cmd.c_str());
 			/*string cmd2 = "phyutility -clean 0.5 -in ";
 			 cmd2 += genefoldername+"genome_shrink_aln -out ";
@@ -1485,6 +1547,7 @@ void SQLiteConstructor::reduce_genomes(vector<Sequence> * keep_seqs) {
 			 system(cmd2.c_str());
 			 */
 			//instead of phyutility
+			cout << "excising aligned sites (retaining these)" << endl;
 			clean_shrunken_genomes();
 			/*
 			 * reading in the sequencing and replacing
@@ -1506,19 +1569,18 @@ void SQLiteConstructor::reduce_genomes(vector<Sequence> * keep_seqs) {
 					keep_seqs->at(i).set_aligned_sequence(cleanSeq);
 				}
 			}
-			cout << "reduced size: " << keep_seqs->at(i).get_taxon_name() << endl;
+			cout << "reduced size: " << keep_seqs->at(i).get_aligned_length() << endl << endl;
 		}
 	}
 }
 
 void SQLiteConstructor::clean_shrunken_genomes() {
-	double percent = 0.5; // missing more than this, then remove
+	double threshold = 0.25; // missing more than this, then remove // this was set to 0.5 but then no sites are removed
 	FastaUtil fu;
 	vector<Sequence> tempalseqs;
-	string trimmed_genomes = genefoldername + "genome_shrink_out";
+	string trimmed_genomes = genefoldername + "genome_shrink_aln";
 	fu.read_aligned_fasta_into(tempalseqs, trimmed_genomes); // assuming this is aligned
 
-	cout << "cleaning seqs" << endl;
 	int seqlength = tempalseqs[0].get_sequence().size();
 	float fseql = float(tempalseqs.size());
 	vector<int> removeem;
@@ -1529,7 +1591,7 @@ void SQLiteConstructor::clean_shrunken_genomes() {
 				gaps += 1;
 		}
 		double curp = gaps / fseql;
-		if (curp > percent) {
+		if (curp > threshold) {
 			removeem.push_back(j);
 		}
 	}
@@ -2039,7 +2101,6 @@ void SQLiteConstructor::saturation_tests(vector<string> taxon_ids_to_be_tested, 
 	 * in the vectors
 	 */
 
-	cout << "starting saturation" << endl;
 	vector<Sequence> seqs_to_be_assigned;
 
 	// add seqs from the source db to the working set
@@ -2122,7 +2183,7 @@ void SQLiteConstructor::saturation_tests(vector<string> taxon_ids_to_be_tested, 
 
 			} else { // there are multiple sequences; need to make an alignment
 				double mad;
-				cout << "using mafft to make preliminary alignment" << endl;
+				cout << "using mafft for preliminary alignment" << endl;
 
 				if (n_total_seqs_to_test < 2) {
 					// can't calculate mad for fewer than three seqs; just do alignment
@@ -2278,69 +2339,87 @@ void SQLiteConstructor::saturation_tests(vector<string> taxon_ids_to_be_tested, 
 	/*
 	 * deal with the singletons
 	 *
-	 * singletons should be sequences that either don't have any data in the
-	 * tree that is input or in the ncbi database if that is the tree to be
-	 * used
+	 * singletons should be sequences that either don't have any data in the tree
+	 * that is input or in the ncbi database if that is the tree to be used
 	 */
 
 	int n_leftovers = seqs_to_be_assigned.size();
-	cout << "\n" << n_leftovers << " unassigned seqs. picking where these should go"<< endl;
+	cout << "\n" << n_leftovers << " unassigned seqs";
 
-	/*
-	 * if NCBI taxa are all that is wanted, and they are wanted to be clean
-	 */
-	for (int i = 0; i < n_leftovers; i++) {
+	if (assignleftovers) {
 
-		// make a sequence object for this leftover seq
-		Sequence this_leftover = seqs_to_be_assigned[i];
+		cout << ". picking where these should go (somewhat experimental)"<< endl;
 
-		// find the alignment for which this leftover seq has the highest affinity
-		int best_score = 0;
-		int best_match = 0;
-		for (int j = 0; j < original_alignments_added.size(); j++) {
-			vector<Sequence> tempseqs;
-			bool aligned = true;
-			gene_db.load_unaligned_seqs_from_original_alignment_into(tempseqs, original_alignments_added[j]);
-			int tscore = get_single_to_group_seq_score(this_leftover, tempseqs);
-			if (tscore > best_score) {
-				best_score = tscore;
-				best_match = j;
+		// open the source db to get info about the leftovers
+		SQLiteDBController dbc = SQLiteDBController(db);
+
+		for (int i = 0; i < n_leftovers; i++) {
+
+			// make a sequence object for this leftover seq
+			Sequence this_leftover = seqs_to_be_assigned[i];
+
+			// find the alignment for which this leftover seq has the highest affinity
+			int best_score = 0;
+			int best_match = 0;
+			for (int j = 0; j < original_alignments_added.size(); j++) {
+				vector<Sequence> tempseqs;
+				bool aligned = true;
+				gene_db.load_unaligned_seqs_from_original_alignment_into(tempseqs, original_alignments_added[j]);
+				int tscore = get_single_to_group_seq_score(this_leftover, tempseqs);
+				if (tscore > best_score) {
+					best_score = tscore;
+					best_match = j;
+				}
 			}
+
+			// get info about the best matching alignment for this leftover
+			int best_aln_for_this_leftover = original_alignments_added[best_match];
+			string best_aln_db_name = gene_db.get_original_alignment_name_for_db_id(best_aln_for_this_leftover);
+			string best_aln_tax_name = dbc.get_scientific_name_for_ncbi_taxon_id(atoi(best_aln_db_name.c_str()));
+
+			cout << "adding leftover seq for " << this_leftover.get_taxon_name();
+			if (this_leftover.is_user_seq())
+				cout << " (user sequence)";
+			else
+				cout << " (gi " << this_leftover.get_ncbi_gi_number() << ")";
+			cout << " to " + best_aln_tax_name << endl;
+
+			// get all the seqs for the best matching alignment and make a new alignment including this leftover
+			vector<Sequence> tempseqs;
+			gene_db.load_unaligned_seqs_from_original_alignment_into(tempseqs, best_aln_for_this_leftover);
+			tempseqs.push_back(this_leftover);
+			make_mafft_multiple_alignment(&tempseqs);
+
+			// get the newly aligned seq, and add this aligned seq to the alignment in the db
+			retrieve_aligned_sequence_from_last_alignment_for_seq(&this_leftover);
+			gene_db.associate_sequence_with_alignment(best_aln_for_this_leftover, this_leftover);
+
+			// read mafft
+			vector<Sequence> aligned_seqs;
+			load_sequences_from_last_alignment_into(aligned_seqs);
+
+			gene_db.update_align_seqs(best_aln_for_this_leftover, aligned_seqs);
+
+			if (updateDB == true)
+				gene_db.toggle_alignment_update(original_alignments_added[best_match]);
 		}
 
-		// get info about the best matching alignment for this leftover
-		SQLiteDBController dbc = SQLiteDBController(db);
-		int best_aln_for_this_leftover = original_alignments_added[best_match];
-		string best_aln_db_name = gene_db.get_original_alignment_name_for_db_id(best_aln_for_this_leftover);
-		string best_aln_tax_name = dbc.get_scientific_name_for_ncbi_taxon_id(atoi(best_aln_db_name.c_str()));
+	} else { // do not assign leftovers
+		if (n_leftovers > 0) {
+			cout << " (written to the '.leftovers' file) will not be included in the run.\n(to include them, issue the keyword 'assignleftovers' in the config file, but be aware \nthey may be assigned in surprising places!)." << endl;
 
-		cout << "adding leftover seq for " << this_leftover.get_taxon_name();
-		if (this_leftover.is_user_seq())
-			cout << " (user sequence)";
-		else
-			cout << " (gi " << this_leftover.get_ncbi_gi_number() << ")";
-		cout << " to " + best_aln_tax_name << endl;
-
-		// get all the seqs for the best matching alignment and make a new alignment including this leftover
-		vector<Sequence> tempseqs;
-		gene_db.load_unaligned_seqs_from_original_alignment_into(tempseqs, best_aln_for_this_leftover);
-		tempseqs.push_back(this_leftover);
-		make_mafft_multiple_alignment(&tempseqs);
-
-		// get the newly aligned seq, and add this aligned seq to the alignment in the db
-		retrieve_aligned_sequence_from_last_alignment_for_seq(&this_leftover);
-		gene_db.associate_sequence_with_alignment(best_aln_for_this_leftover, this_leftover);
-
-		// read mafft
-		vector<Sequence> aligned_seqs;
-		load_sequences_from_last_alignment_into(aligned_seqs);
-
-		gene_db.update_align_seqs(best_aln_for_this_leftover, aligned_seqs);
-
-		if (updateDB == true)
-			gene_db.toggle_alignment_update(original_alignments_added[best_match]);
+			// write the leftovers to a file
+			ofstream leftfile;
+			leftfile.open((gene_name + ".leftovers").c_str(), ios::out);
+			leftfile << "ncbi_tax_id\ttaxon_name\tgi\tsource" << endl;
+			for (int i = 0; i < n_leftovers; i++) {
+				Sequence this_leftover = seqs_to_be_assigned[i];
+				leftfile << this_leftover.get_ncbi_tax_id() << "\t" << this_leftover.get_taxon_name() << "\t" << this_leftover.get_ncbi_gi_number() << "\t" << this_leftover.get_source() << endl;
+			}
+			leftfile.close();
+		}
 	}
-	cout << "finished with sequence processing" << endl;
+	cout << "\nfinished assembly" << endl;
 }
 
 /*

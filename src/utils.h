@@ -52,6 +52,8 @@ void replaceAll(string& str, const string& from, const string& to);
 //took out the const
 int get_swps3_score_and_rc_cstyle(SBMatrix mat, Sequence * inseq1, Sequence * inseq2);
 
+vector<string> split(const string &s, char delim);
+
 vector<string> query_mask(string url);
 void convert_fasta_to_phylip(string & fasta_fname, string & phylip_fname);
 void get_earliest_branch_representation(string ncbidb,string rootid, Tree * tree);

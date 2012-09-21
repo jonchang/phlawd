@@ -40,8 +40,8 @@ using namespace std;
 #include "omp.h"
 #include "SWPS3_matrix.h"
 
-int main(int argc, char* argv[]){
-    if(argc != 3){
+int main(int argc, char* argv[]) {
+    if(argc != 3) {
 	cout << "PHLAWD 3.3a" << endl;
 	cout << "you need more arguments." << endl;
 	cout << "usage: PHLAWD task configfile" << endl;
@@ -49,7 +49,7 @@ int main(int argc, char* argv[]){
 	cout << "	seqquery     -- just get the distribution of best hits to get cutoffs" << endl;
 	cout << "	assemble     -- includes assembling and profiling" << endl;
 	cout << "	justprofile  -- just profiles (assumes you have assembled)" << endl;
-	cout << "	justassemble -- just assembles (assumes you will profile with justprofile" << endl;
+	cout << "	justassemble -- just assembles (assumes you will profile with justprofile)" << endl;
 	//cout << "	changenames -- changes from ncbi numbers to names for a file (newick, fasta, newick, phylip)" <<endl;
 	cout << "	setupdb      -- tasks performed on the SQLite database" << endl;
 	cout << "	outlier      -- analyses on the detection of outliers" << endl;
@@ -122,6 +122,8 @@ int main(int argc, char* argv[]){
 	    bool useITS = false;
 	    bool updateDB = false;
 	    bool updateFILE = false;
+	    bool assignleft = false;
+	    int shrinkthresh = 5000;
 	    string updatef = "";
 	    string maskurl = "";
 	    string genedb;
@@ -202,6 +204,8 @@ int main(int argc, char* argv[]){
 		    useITS = true;
 		}else if(!strcmp(tokens[0].c_str(),  "numthreads")){
 		    numthreads = atoi(tokens[1].c_str());
+		}else if(!strcmp(tokens[0].c_str(),  "shrinkablethreshold")){
+		    shrinkthresh = atoi(tokens[1].c_str());
 		}else if(!strcmp(tokens[0].c_str(), "gbmask")){
 		    maskurl = tokens[1];
 		}else if(!strcmp(tokens[0].c_str(), "updateDB")){
@@ -239,6 +243,9 @@ int main(int argc, char* argv[]){
 		}else if(!strcmp(tokens[0].c_str(),"outliertreerooted")){
 		    outliertreerooted = true;
 		    cout << "the outlier tree is rooted" << endl;
+		}else if(!strcmp(tokens[0].c_str(),"assignleftovers")){
+		    assignleft = true;
+		    cout << "leftover sequences will be placed (experimental)" << endl;
 		}
 	    }
 	    ifs.close();
@@ -255,7 +262,7 @@ int main(int argc, char* argv[]){
 	    if(asse == true){
 		cout << "assembly" << endl;
 		SQLiteConstructor * a;
-		a = new SQLiteConstructor(clade, search, searchliteral, gene, genedb, mad, coverage, identity, db, knownfile, useITS, numthreads, automated, updateDB, updatef);
+		a = new SQLiteConstructor(clade, search, searchliteral, gene, genedb, mad, coverage, identity, db, knownfile, useITS, numthreads, automated, updateDB, updatef, assignleft, shrinkthresh);
 		cout << "number of threads: " << a->get_numthreads() << endl;
 		omp_set_num_threads(a->get_numthreads());
 		cout << "search clade: " << a->get_cladename() << endl;

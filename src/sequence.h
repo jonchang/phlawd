@@ -1,6 +1,6 @@
 #ifndef SEQUENCE_H_
 #define SEQUENCE_H_
-#define SEQ_FIELD_SEP "|"
+#define SEQ_FIELD_SEP '|'
 
 #include <string>
 
@@ -58,7 +58,10 @@ public:
     bool is_original_seq();
     bool is_exemplar();
     int get_sqlite_id();
+    int get_aligned_length();
+    int get_unaligned_length();
     string get_sequence();
+    string get_source();
     string get_aligned_seq();
     string get_unaligned_seq();
     string get_ncbi_tax_id();

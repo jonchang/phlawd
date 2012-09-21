@@ -34,6 +34,9 @@ GeneDB::GeneDB(string nm) :
 
 // TODO: would be nice for everything to have consistent db interaction
 
+// TODO: rework this class to provide all interactivity with the gene db, so other classes don't have to.
+
+
 /******************************************************************************************
  *
  *	the following private functions define interaction with the database itself, as

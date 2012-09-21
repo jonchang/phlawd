@@ -22,6 +22,8 @@
  * SQLiteDBController.h
  */
 
+// TODO: rework this class to provide all interactivity with the source db, so other classes don't have to.
+
 #include <string>
 #include <map>
 #include <vector>
