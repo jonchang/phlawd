@@ -39,6 +39,8 @@ using namespace std;
 #include "node.h"
 #include "genedb.h"
 
+#define MAX_ONE_TAXON_CHILD_ALNS 20
+
 struct seqRecordTuple;
 typedef struct seqRecordTuple seqRecordTuple;
 
@@ -112,7 +114,7 @@ private:
     void reduce_genomes(vector<Sequence> * keep_seqs);
     void clean_shrunken_genomes();
 
-    void load_info_on_valid_immediate_children_of_taxon_id_into(string parent_taxon_id, vector<string> & child_ids, vector<string> & child_tax_names);
+    void load_info_on_immediate_children_of_taxon_id_into(string parent_taxon_id, vector<string> & child_ids, vector<string> & child_tax_names);
     void find_db_child_seqs_of_ncbi_taxon_id(string parent_taxon_id, vector<Sequence> * seqs_to_search, vector<Sequence> * found_seqs);
     vector<string> get_valid_ncbi_child_taxon_ids_for_parent_id(string name_id);
 

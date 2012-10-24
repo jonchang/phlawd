@@ -92,7 +92,7 @@ SQLiteConstructor::SQLiteConstructor(
 		string inupdatefile,
 		bool assignleft,
 		int shrinkthresh) :
-				clade_name(cn),
+		clade_name(cn),
 				search(searchstr),
 				searchliteral(searchlit),
 				gene_name(genen),
@@ -254,19 +254,19 @@ void SQLiteConstructor::set_user_fasta_file(string filename, bool skipdbcheck) {
 
 	//need to edit the names if there aren't already changed
 	//should go into the log
-/*	for (int i = 0; i < user_seqs->size(); i++) {
-		string tstring(user_seqs->at(i).get_label());
-		fix_bad_chars_for_seq_names(tstring);
+	/*	for (int i = 0; i < user_seqs->size(); i++) {
+	 string tstring(user_seqs->at(i).get_label());
+	 fix_bad_chars_for_seq_names(tstring);
 
-		//if user is not in the front then add it
+	 //if user is not in the front then add it
 
-		if (tstring.find("user_") != 0)
-			tstring = "user_" + tstring;
-		cout << "changing " << user_seqs->at(i).get_label() << " -> " << tstring << endl;
+	 if (tstring.find("user_") != 0)
+	 tstring = "user_" + tstring;
+	 cout << "changing " << user_seqs->at(i).get_label() << " -> " << tstring << endl;
 
-		// TODO: not sure what this is getting set as
-//		user_seqs->at(i).set_label(tstring);
-	} */
+	 // TODO: not sure what this is getting set as
+	 //		user_seqs->at(i).set_label(tstring);
+	 } */
 
 	//if the ids can be found in the database, this will go ahead and make that link
 	//this should be able to link to the genedb eventually as well
@@ -309,7 +309,8 @@ void SQLiteConstructor::set_user_fasta_file(string filename, bool skipdbcheck) {
 			string tname = userguidetree->getExternalNode(i)->getName();
 			// cout << tname << endl;
 			for (int j = 0; j < user_seqs->size(); j++) {
-				if (tname == user_seqs->at(j).get_taxon_name() || tname == user_seqs->at(j).get_comment() || ("user_" + tname == user_seqs->at(j).get_taxon_name())
+				if (tname == user_seqs->at(j).get_taxon_name() || tname == user_seqs->at(j).get_comment()
+						|| ("user_" + tname == user_seqs->at(j).get_taxon_name())
 						|| ("user_" + tname == user_seqs->at(j).get_comment())) {
 					user_fasta_node_map[&(user_seqs->at(j))] = userguidetree->getExternalNode(i);
 					count += 1;
@@ -336,7 +337,7 @@ int SQLiteConstructor::run() {
 	if (updateDB == true)
 		overwrite_gene_db = false;
 	else
-		overwrite_gene_db= true;
+		overwrite_gene_db = true;
 	gene_db.initialize(overwrite_gene_db);
 
 	// set up containers in case we're doing an update
@@ -357,7 +358,8 @@ int SQLiteConstructor::run() {
 			else
 				preexisting_db_seqs_ncbi_ids.push_back(preexisting_seqs[i].get_ncbi_tax_id());
 		}
-		cout << "processed " << preexisting_seqs.size() << " pre-existing seqs, including " << preexisting_db_seqs_ncbi_ids.size() << " of ncbi origin and " << preexisting_user_seqs_names.size() << " user-supplied ones"<< endl;
+		cout << "processed " << preexisting_seqs.size() << " pre-existing seqs, including " << preexisting_db_seqs_ncbi_ids.size() << " of ncbi origin and "
+				<< preexisting_user_seqs_names.size() << " user-supplied ones" << endl;
 
 	} else { // not an update run
 
@@ -365,6 +367,7 @@ int SQLiteConstructor::run() {
 
 		gifile.open(gin.c_str(), fstream::out);
 		gifile << "ncbi_tax_id\tgi_number\tedited_name" << endl;
+
 		// output the user fasta seqs
 		if (userfasta == true) {
 			ufafile.open(user_fasta_fname.c_str(), fstream::out);
@@ -389,7 +392,7 @@ int SQLiteConstructor::run() {
 		// find *all* the sequences in the source db that satisfy the search criteria
 		load_info_for_all_seqs_matching_search_into(all_seqs_matching_search);
 
-		if(all_seqs_matching_search.size() == 0) {
+		if (all_seqs_matching_search.size() == 0) {
 			cerr << "there are no seqs in the source db that match the search criteria. quitting";
 			exit(0);
 		}
@@ -401,6 +404,7 @@ int SQLiteConstructor::run() {
 		if (automated == true) {
 			// for so-called 'automated' runs, we use an ncbi id instead of a name?
 			// this seems redundant... if we already know the ncbi id, why are we attempting to select it? just for validation?
+			// TODO: this is going to be broken now.
 			Query query(conn);
 			query.get_result("SELECT ncbi_id FROM taxonomy WHERE ncbi_id = " + clade_name);
 			while (query.fetch_row()) {
@@ -459,7 +463,7 @@ int SQLiteConstructor::run() {
 		}
 	}    // end skipsearch == false
 
-	reduce_genomes(&filtered_starting_seqs); // TODO: moved this so genomes are reduced before the swps3 comparisons... need to make sure it works.
+	reduce_genomes(&filtered_starting_seqs);
 
 	// initialize container to hold the seqs that pass the coverage/identity cutoffs
 	vector<Sequence> * seqs_to_align = new vector<Sequence>();
@@ -501,15 +505,13 @@ int SQLiteConstructor::run() {
 	// get the list of files and record the higher taxa name and
 	// add the additional sequences to the right hierarchy
 
-	/* we use two vectors here because for some purposes, we need only
-	 * one (such as when we have a user guide tree, we just need names),
-	 * while for others we need both (if we use the ncbi taxonomy we use
-	 * the ids and the names). see saturation_tests() for details on use */
+	// we use two vectors here because for some purposes, we need only
+	// one (such as when we have a user guide tree, we just need names),
+	// while for others we need both (if we use the ncbi taxonomy we use
+	// the ids and the names). see saturation_tests() for details on use
 
-	vector<string> search_clade_tax_ids; // TODO: need better names
+	vector<string> search_clade_tax_ids;
 	vector<string> search_clade_tax_names;
-
-//	reduce_genomes(seqs_to_align);
 
 	if (updateDB == true) {
 		vector<int> toremove;
@@ -739,7 +741,6 @@ int SQLiteConstructor::run() {
 	return 0;
 }
 
-
 string SQLiteConstructor::get_cladename() {
 	return clade_name;
 }
@@ -855,7 +856,8 @@ vector<Sequence> SQLiteConstructor::make_seqs_from_seq_tuples_for_taxon(int taxo
 		// first look up this seq's taxon
 		Query qtax(conn);
 		this_seq_ncbi_tax_id = seq_tuples[i].ncbi_tax_id;
-		sql = "SELECT id, left_value, right_value, edited_name FROM taxonomy WHERE ncbi_id == " + this_seq_ncbi_tax_id + " and name_class == 'scientific name';";
+		sql = "SELECT id, left_value, right_value, edited_name FROM taxonomy WHERE ncbi_id == " + this_seq_ncbi_tax_id
+				+ " and name_class == 'scientific name';";
 		qtax.get_result(sql);
 		while (qtax.fetch_row()) {
 			this_tax_db_id = qtax.getval();
@@ -1045,7 +1047,8 @@ vector<Sequence> SQLiteConstructor::use_only_names_from_file(vector<Sequence> & 
 /* just filters a set of sequences against a set of ncbi ids, saving the
  * ones corresponding to taxa within the set of ids into filtered_seqs.
  */
-void SQLiteConstructor::load_sequences_filtered_by_ncbi_taxon_id_into(vector<Sequence> & filtered_seqs, vector<Sequence> & seqs_to_filter, vector<string> & ncbi_ids) {
+void SQLiteConstructor::load_sequences_filtered_by_ncbi_taxon_id_into(vector<Sequence> & filtered_seqs, vector<Sequence> & seqs_to_filter,
+		vector<string> & ncbi_ids) {
 	for (int i = 0; i < seqs_to_filter.size(); i++) {
 		string taxid = seqs_to_filter[i].get_ncbi_tax_id();
 		int scount = count(ncbi_ids.begin(), ncbi_ids.end(), taxid);
@@ -1119,8 +1122,8 @@ Sequence SQLiteConstructor::find_best_exemplar_for_higher_taxon(string higher_ta
 			int ret = get_swps3_score_and_rc_cstyle(mat, &known_seqs->at(j), &tseq);
 			double tsc = double(ret) / double(scores[j]);
 
-/*					Sequence tseqrc = Sequence();
-			tseqrc.set_label(tseq.get_label()); */
+			/*					Sequence tseqrc = Sequence();
+			 tseqrc.set_label(tseq.get_label()); */
 			Sequence tseqrc = tseq.clone();
 
 			tseqrc.set_unaligned_sequence(tseq.reverse_complement());
@@ -1513,7 +1516,8 @@ void SQLiteConstructor::reduce_genomes(vector<Sequence> * keep_seqs) {
 	}
 	for (unsigned int i = 0; i < keep_seqs->size(); i++) {
 		if (keep_seqs->at(i).get_sequence().size() > shrinkablethreshold) { // TODO: make this user-settable
-			cout << "sequence for " << keep_seqs->at(i).get_taxon_name() << " (gi " << keep_seqs->at(i).get_ncbi_gi_number() << ") " << " is longer than " << shrinkablethreshold << ". it will be shrunk " << endl;
+			cout << "sequence for " << keep_seqs->at(i).get_taxon_name() << " (gi " << keep_seqs->at(i).get_ncbi_gi_number() << ") " << " is longer than "
+					<< shrinkablethreshold << ". it will be shrunk " << endl;
 			Sequence tseq = keep_seqs->at(i);
 			double maxiden = 0;
 			int maxknown = 0;
@@ -1646,7 +1650,7 @@ vector<string> SQLiteConstructor::get_valid_ncbi_child_taxon_ids_for_parent_id(s
 //			bool is_not_environmental_seq = !(this_name.find("environmental") == string::npos || this_name_class.find("environmental") == string::npos);
 
 //			if (is_scientific_name && is_not_environmental_seq) {
-				allids.push_back(this_ncbi_taxon_id);
+			allids.push_back(this_ncbi_taxon_id);
 //			}
 		}
 		query.free_result();
@@ -1705,7 +1709,7 @@ vector<string> SQLiteConstructor::get_valid_ncbi_child_taxon_ids_for_parent_id(s
 			// save taxa that are not environmental samples
 			while (query.fetch_row()) {
 				string this_child_taxon_name = query.getstr();
-				bool is_not_environmental_sample = (int)this_child_taxon_name.find("environmental") == string::npos ? true: false;
+				bool is_not_environmental_sample = (int) this_child_taxon_name.find("environmental") == string::npos ? true : false;
 
 				if (is_not_environmental_sample) {
 					validated_child_taxon_ids.push_back(this_child_taxon_id);
@@ -1716,47 +1720,47 @@ vector<string> SQLiteConstructor::get_valid_ncbi_child_taxon_ids_for_parent_id(s
 			query.free_result();
 		}
 
-/*		while (!taxon_ids_to_check.empty()) {
-			// attempt to get all children for this taxon
-			string sql = "SELECT ncbi_id FROM taxonomy WHERE parent_ncbi_id = " + taxon_ids_to_check.back() + " and name_class='scientific name';";
-			Query query(conn);
-			query.get_result(sql);
-			taxon_ids_to_check.pop_back();
+		/*		while (!taxon_ids_to_check.empty()) {
+		 // attempt to get all children for this taxon
+		 string sql = "SELECT ncbi_id FROM taxonomy WHERE parent_ncbi_id = " + taxon_ids_to_check.back() + " and name_class='scientific name';";
+		 Query query(conn);
+		 query.get_result(sql);
+		 taxon_ids_to_check.pop_back();
 
-			if (query.num_rows() > 0) {
-				deepest_parent_is_tip = false;
-			}
-			while (query.fetch_row()) {
+		 if (query.num_rows() > 0) {
+		 deepest_parent_is_tip = false;
+		 }
+		 while (query.fetch_row()) {
 
-				string this_ncbi_taxon_id = query.getstr();
-				taxon_ids_to_check.push_back(this_ncbi_taxon_id);
-				all_child_taxon_ids.push_back(this_ncbi_taxon_id);
-			}
-			query.free_result();
-		}
+		 string this_ncbi_taxon_id = query.getstr();
+		 taxon_ids_to_check.push_back(this_ncbi_taxon_id);
+		 all_child_taxon_ids.push_back(this_ncbi_taxon_id);
+		 }
+		 query.free_result();
+		 }
 
 
 
-		vector<string> validated_child_taxon_ids;
-		vector<string> allnames;
+		 vector<string> validated_child_taxon_ids;
+		 vector<string> allnames;
 
-		for (int i = 0; i < all_child_taxon_ids.size(); i++) {
-			string sql = "SELECT name,name_class FROM taxonomy WHERE ncbi_id = ";
-			sql += all_child_taxon_ids[i];
-			Query query(conn);
-			query.get_result(sql);
-			//StoreQueryResult R = query.store();
-			while (query.fetch_row()) {
-				//string tid = R[j][0].c_str();
-				string tn = query.getstr();
-				string cln = query.getstr();
-				if (cln.find("scientific") != string::npos && tn.find("environmental") == string::npos && cln.find("environmental") == string::npos) {
-					validated_child_taxon_ids.push_back(all_child_taxon_ids[i]); //was taxon id, now ncbi id
-					allnames.push_back(tn);
-				}
-			}
-			query.free_result();
-		} */
+		 for (int i = 0; i < all_child_taxon_ids.size(); i++) {
+		 string sql = "SELECT name,name_class FROM taxonomy WHERE ncbi_id = ";
+		 sql += all_child_taxon_ids[i];
+		 Query query(conn);
+		 query.get_result(sql);
+		 //StoreQueryResult R = query.store();
+		 while (query.fetch_row()) {
+		 //string tid = R[j][0].c_str();
+		 string tn = query.getstr();
+		 string cln = query.getstr();
+		 if (cln.find("scientific") != string::npos && tn.find("environmental") == string::npos && cln.find("environmental") == string::npos) {
+		 validated_child_taxon_ids.push_back(all_child_taxon_ids[i]); //was taxon id, now ncbi id
+		 allnames.push_back(tn);
+		 }
+		 }
+		 query.free_result();
+		 } */
 		return validated_child_taxon_ids; // TODO: would be better to use pass by reference
 	}
 }
@@ -1874,7 +1878,6 @@ void SQLiteConstructor::make_mafft_multiple_alignment(vector<Sequence> * inseqs)
 	vector<Sequence> emptys;
 	make_mafft_multiple_alignment(inseqs, &emptys);
 }
-
 
 void SQLiteConstructor::make_mafft_multiple_alignment(vector<Sequence> * inseqs1, vector<Sequence> * inseqs2) {
 
@@ -2044,7 +2047,8 @@ double SQLiteConstructor::calculate_MAD_quicktree_sample(vector<Sequence> * inse
 	return calculate_MAD_quicktree();
 }
 
-void SQLiteConstructor::load_info_on_valid_immediate_children_of_taxon_id_into(string parent_taxon_id, vector<string> & child_ncbi_tax_ids, vector<string> & child_tax_names) {
+void SQLiteConstructor::load_info_on_immediate_children_of_taxon_id_into(string parent_taxon_id, vector<string> & child_ncbi_tax_ids,
+		vector<string> & child_tax_names) {
 
 	/* just get the immediate children (depth 1) from the parent taxon, and
 	 * load their ncbi ids and taxon names into the passed vectors
@@ -2066,29 +2070,22 @@ void SQLiteConstructor::load_info_on_valid_immediate_children_of_taxon_id_into(s
 	query.free_result();
 }
 
-void SQLiteConstructor::saturation_tests(vector<string> taxon_ids_to_be_tested, vector<string> taxon_names_to_be_tested, vector<Sequence> * source_db_seqs_to_assign) {
+void SQLiteConstructor::saturation_tests(vector<string> taxon_ids_to_be_tested, vector<string> taxon_names_to_be_tested,
+		vector<Sequence> * source_db_seqs_to_assign) {
 
-	/* saturation tests use the mad score to subdivide the set of all taxa
-	 * into the smaller sets that will be used to make the original alignments
-	 * that we will use to begin the profiling process.
+	/* The saturation tests use the mad score to subdivide the set of all taxa into the smaller sets, which will
+	 * be used to make the original alignments that we will use to begin the profiling process.
 	 *
 	 * IF we are using the ncbi taxonomy as the guide tree for the tests:
 	 *
-	 * we start with the ncbi taxon ids in the passed taxon_ids_to_be_tested
-	 * vector, which at this point, as far as i can tell, is just the search
-	 * clade from the config file. for every one of these taxon ids, we pull
-	 * all the taxa from keep_seqs from children of this taxon using the
-	 * filter_seqs_against_valid_children_of_ncbi_taxon_id function, align
-	 * these sequences with mafft, and feed this alignment to quicktree to
-	 * create a distance matrix. from this distance matrix, we calculate the
-	 * mad score for the taxon.
+	 * We start with the ncbi taxon ids in the passed taxon_ids_to_be_tested vector, which at this point, as far
+	 * as i can tell, is just the search clade from the config file. for every one of these taxon ids, we pull
+	 * all the sequences from keep_seqs that represent children of this taxon, using the
+	 * filter_seqs_against_valid_children_of_ncbi_taxon_id function, align these sequences with mafft, and feed
+	 * this alignment to quicktree to create a distance matrix. from this distance matrix, we calculate the mad
+	 * score for the taxon. If the mad score passes, then we record the set of all sequences for the current taxon into an alignment.
 	 *
-	 * if the mad score passes, then we...
-	 *
-	 * (haven't figured this part out yet...)
-	 *
-	 *
-	 * Things change if we are using a user-supplied guide tree...
+	 * Things are different if we are using a user-supplied guide tree... or if we are doing an update...
 	 *
 	 */
 
@@ -2117,21 +2114,27 @@ void SQLiteConstructor::saturation_tests(vector<string> taxon_ids_to_be_tested, 
 		}
 	}
 
-	// not sure what these are for yet...
+	// remember the alignments that we add
 	vector<int> original_alignments_added;
-	vector<string> seq_set_filenames; // here they will be not node names but numbers <- what numbers?
+	vector<string> seq_set_filenames; // here they will be not node names but numbers <- what numbers? this is unclear
 
 	if (ncbi_saturation == true) {
 		string tax_name_to_test;
 		string tax_id_to_test;
 
-		while (!taxon_names_to_be_tested.empty()) { // && !seqs_to_be_assigned.empty()) {
+		while (!taxon_names_to_be_tested.empty()) {
 
 			/* each iteration of the saturation test takes the next taxon off the stack
-			 * and checks (using the mad score) if it needs to be subdivided. if it does
-			 * then we subdivide, add its children to the stack, and continue. we keep
-			 * running the tests until all taxa (or taxa they have been subdivided into)
-			 * have passed.
+			 * and checks (using the mad score) if it needs to be subdivided.
+			 *
+			 * If it does then we check to first check to make sure we're not subdividing
+			 * a genus into a multitude of single-species alignments. If we are (happens
+			 * fairly frequently with large genera and causes dramatic slowdowns) then we
+			 * just keep the genus as a unit anyway and add it to the alignments. If it
+			 * isn't a genus getting broken into lots of species though, then we subdivide,
+			 * add the taxon's children to the stack, and continue. We keep running the
+			 * tests until all taxa (or taxa they have been subdivided into) have passed
+			 * the MAD test.
 			 *
 			 * sequences in seqs_to_align that haven't been assigned at the end of the
 			 * tests are treated by the code that follows, that deals with leftovers.
@@ -2162,7 +2165,8 @@ void SQLiteConstructor::saturation_tests(vector<string> taxon_ids_to_be_tested, 
 				continue; // nothing to test for this taxon
 			}
 
-			cout << "\ntaxon " << tax_name_to_test << " (ncbi id = " << tax_id_to_test << "): " << test_tax_db_child_seqs->size() << " db seqs, " << test_tax_user_child_seqs->size() << " user seqs; unassigned seqs remaining: " << seqs_to_be_assigned.size() << endl;
+			cout << "\ntaxon " << tax_name_to_test << " (ncbi id = " << tax_id_to_test << "): " << test_tax_db_child_seqs->size() << " db seqs, "
+					<< test_tax_user_child_seqs->size() << " user seqs; unassigned seqs remaining: " << seqs_to_be_assigned.size() << endl;
 			if (n_total_seqs_to_test == 1) {
 
 				// there can be no gaps in a one-sequence alignment, so just find the seq and set it as aligned
@@ -2201,8 +2205,81 @@ void SQLiteConstructor::saturation_tests(vector<string> taxon_ids_to_be_tested, 
 				}
 
 				cout << "mad: " << mad << endl;
-				// if mad scores are good, store result
+
+				// check the mad score and decide what to do with the alignment
+				bool add_alignment = false;
+
+				// if the mad score is good
 				if (mad <= mad_cutoff) {
+					add_alignment = true;
+
+				// if the mad score is bad
+				} else {
+
+					// check to make sure we're not about to dismantle a genus into many 1-species alns
+					bool explode_taxon;
+
+					Database conn(db);
+					Query query(conn);
+
+					// get the rank of the current taxon
+					string sql = "select node_rank from taxonomy where name_class == 'scientific name' and ncbi_id == " + tax_id_to_test;
+					query.get_result(sql);
+
+					string rank = "";
+					while (query.fetch_row())
+						rank = query.getstr();
+
+					// if it's not a genus, blow it up
+					if (rank != "genus") {
+						explode_taxon = true;
+
+					} else {
+
+						// get all the immediate taxonomic children of the genus
+						vector<string> child_ids;
+						vector<string> child_names; // just an argument required by the function; sloppy since we don't use this info
+						load_info_on_immediate_children_of_taxon_id_into(tax_id_to_test, child_ids, child_names);
+
+						// check how many are single species
+						int n_single_taxon_children = 0;
+						int n_children = 0;
+						for (int i = 0; i < child_ids.size(); i++) {
+
+							// first get lval/rval for this child
+							string sql = "select left_value, right_value from taxonomy where ncbi_id == " + tax_id_to_test;
+							query.get_result(sql);
+							int lval, rval;
+							while (query.fetch_row()) {
+								lval = query.getval();
+								rval = query.getval();
+							}
+
+							// increment counters
+							n_children++;
+							if ((rval - lval) < 2)
+								// no children
+								n_single_taxon_children++;
+						}
+
+						// only explode the taxon if there is at least one multi-taxon child, and not too many singletons
+						if (n_children > n_single_taxon_children && n_single_taxon_children <= MAX_ONE_TAXON_CHILD_ALNS) {
+							explode_taxon = true;
+						} else {
+							explode_taxon = false;
+							cout << "not splitting this genus as it would add " << n_single_taxon_children << " single-species alignments" << endl;
+						}
+					}
+
+					if (explode_taxon)
+						// push the children into taxon_ids_to_be_tested
+						load_info_on_immediate_children_of_taxon_id_into(tax_id_to_test, taxon_ids_to_be_tested, taxon_names_to_be_tested);
+					else
+						add_alignment = true;
+				}
+
+				// if the mad score was good or we refused to break up a genus
+				if (add_alignment) {
 					update_seqs_using_last_alignment(test_tax_db_child_seqs, test_tax_user_child_seqs);
 					for (int i = 0; i < test_tax_db_child_seqs->size(); i++) {
 						remove_seq_from_vector_by_taxon_name(&seqs_to_be_assigned, test_tax_db_child_seqs->at(i).get_taxon_name());
@@ -2215,9 +2292,6 @@ void SQLiteConstructor::saturation_tests(vector<string> taxon_ids_to_be_tested, 
 					if (updateDB == true)
 						gene_db.toggle_alignment_update(alignid);
 					original_alignments_added.push_back(alignid);
-				}
-				else { // if mad scores are bad push the children into taxon_ids_to_be_tested
-					load_info_on_valid_immediate_children_of_taxon_id_into(tax_id_to_test, taxon_ids_to_be_tested, taxon_names_to_be_tested);
 				}
 			}
 			delete (test_tax_db_child_seqs);
@@ -2348,7 +2422,7 @@ void SQLiteConstructor::saturation_tests(vector<string> taxon_ids_to_be_tested, 
 
 	if (assignleftovers) {
 
-		cout << ". picking where these should go (somewhat experimental)"<< endl;
+		cout << ". picking where these should go (somewhat experimental)" << endl;
 
 		// open the source db to get info about the leftovers
 		SQLiteDBController dbc = SQLiteDBController(db);
@@ -2406,7 +2480,9 @@ void SQLiteConstructor::saturation_tests(vector<string> taxon_ids_to_be_tested, 
 
 	} else { // do not assign leftovers
 		if (n_leftovers > 0) {
-			cout << " (written to the '.leftovers' file) will not be included in the run.\n(to include them, issue the keyword 'assignleftovers' in the config file, but be aware \nthey may be assigned in surprising places!)." << endl;
+			cout
+					<< " (written to the '.leftovers' file) will not be included in the run.\n(to include them, issue the keyword 'assignleftovers' in the config file, but be aware \nthey may be assigned in surprising places!)."
+					<< endl;
 
 			// write the leftovers to a file
 			ofstream leftfile;
@@ -2414,7 +2490,8 @@ void SQLiteConstructor::saturation_tests(vector<string> taxon_ids_to_be_tested, 
 			leftfile << "ncbi_tax_id\ttaxon_name\tgi\tsource" << endl;
 			for (int i = 0; i < n_leftovers; i++) {
 				Sequence this_leftover = seqs_to_be_assigned[i];
-				leftfile << this_leftover.get_ncbi_tax_id() << "\t" << this_leftover.get_taxon_name() << "\t" << this_leftover.get_ncbi_gi_number() << "\t" << this_leftover.get_source() << endl;
+				leftfile << this_leftover.get_ncbi_tax_id() << "\t" << this_leftover.get_taxon_name() << "\t" << this_leftover.get_ncbi_gi_number() << "\t"
+						<< this_leftover.get_source() << endl;
 			}
 			leftfile.close();
 		}
@@ -2488,9 +2565,9 @@ void SQLiteConstructor::add_seqs_from_db_to_seqs_vector(string alignment_name, v
 	Database conn(db);
 	for (unsigned int i = 0; i < tseqs.size(); i++) {
 
-/*		size_t found;
-		//if it is a user seq
-		found = tseqs[i].get_label().find("user_"); */
+		/*		size_t found;
+		 //if it is a user seq
+		 found = tseqs[i].get_label().find("user_"); */
 
 		if (tseqs[i].is_user_seq()) {
 
@@ -2553,7 +2630,7 @@ void SQLiteConstructor::remove_seq_from_vector_by_taxon_name(vector<Sequence> * 
 	}
 	v->erase(v->begin() + position);
 	if (v->size() != sz - 1) {
-		cerr << "sequence '" +  taxon_name + "' could not be removed from the vector. it may not have been found" << endl;
+		cerr << "sequence '" + taxon_name + "' could not be removed from the vector. it may not have been found" << endl;
 		exit(1);
 	}
 }
@@ -2573,7 +2650,6 @@ void SQLiteConstructor::remove_seq_from_vector_by_ncbi_id(vector<Sequence> * v, 
 		exit(1);
 	}
 }
-
 
 void SQLiteConstructor::update_seqs_using_last_alignment(vector<Sequence> * db_seqs_to_update, vector<Sequence> * user_seqs_to_update) {
 	FastaUtil fu;
@@ -2649,10 +2725,10 @@ void SQLiteConstructor::load_sequences_from_last_alignment_into(vector<Sequence>
 	string outfile = genefoldername + "outfile";
 	fu.read_aligned_fasta_into(tempalseqs, outfile);
 
-/*	this is just duplicting effort
- 	for (int i = 0; i < tempalseqs.size(); i++) {
-		tempalseqs[i].set_label(tempalseqs[i].get_label());
-		tempalseqs[i].set_aligned_sequence(tempalseqs[i].get_sequence());
-		temp_seqs->push_back(tempalseqs[i]);
-	} */
+	/*	this is just duplicting effort
+	 for (int i = 0; i < tempalseqs.size(); i++) {
+	 tempalseqs[i].set_label(tempalseqs[i].get_label());
+	 tempalseqs[i].set_aligned_sequence(tempalseqs[i].get_sequence());
+	 temp_seqs->push_back(tempalseqs[i]);
+	 } */
 }

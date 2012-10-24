@@ -79,6 +79,23 @@ string SQLiteDBController::get_sci_name_for_ncbi_tax_id(int ncbi_tax_id) {
 	return taxon_name;
 }
 
+string SQLiteDBController::get_rank_for_ncbi_tax_id(int ncbi_tax_id) {
+
+	Database conn(db_name);
+	Query query(conn);
+
+	string sql = "select node_rank from taxonomy where name_class == 'scientific name' and ncbi_id == ";
+	sql += to_string(ncbi_tax_id);
+	query.get_result(sql);
+
+	string rank = "";
+
+	while (query.fetch_row())
+		rank = query.getstr();
+
+	return rank;
+}
+
 bool SQLiteDBController::initiate(){
     bool ret = true;
     //check to see if the database exists

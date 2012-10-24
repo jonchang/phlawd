@@ -48,6 +48,7 @@ public:
     bool initiate();
     void load_seqs(string div,bool downl);
     string get_sci_name_for_ncbi_tax_id(int ncbi_tax_id);
+    string get_rank_for_ncbi_tax_id(int ncbi_tax_id);
 };
 
 #endif /* SQLITEDBCONTROLLER_H_ */
