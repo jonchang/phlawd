@@ -421,6 +421,7 @@ int main(int argc, char* argv[]) {
 	    cout << "setting up database" << endl;
 	    string dbname;
 	    string division = "";
+	    string refseq = "";
 	    bool download = false;
 	    //read file
 	    ifstream ifs(argv[2]);
@@ -437,6 +438,8 @@ int main(int argc, char* argv[]) {
 		    dbname = tokens[1];
 		}else if(!strcmp(tokens[0].c_str(), "division")){
 		    division = tokens[1];
+		}else if(!strcmp(tokens[0].c_str(), "refseq")){
+		    refseq = tokens[1];
 		}else if(!strcmp(tokens[0].c_str(),  "download")){
 		    download = true;
 		}
@@ -450,10 +453,10 @@ int main(int argc, char* argv[]) {
 		cout << "database exists: exiting" << endl;
 		exit(0);
 	    }
-	    if(division.size () > 1){
-		c->load_seqs(division,download);
+	    if (division.size() > 1 || refseq.size() > 1) {
+	    	c->load_seqs(division,refseq,download);
 	    }else{
-		cout << "you need to add a division=<division,like pln> to "<< argv[2] <<endl;
+	    	cout << "you need to specify which seqs you want using either \"division=<division,like pln>\" or \"refseq=<refseq, like plastid>\" to "<< argv[2] <<endl;
 		exit(0);
 	    }
 	    //need to add updating

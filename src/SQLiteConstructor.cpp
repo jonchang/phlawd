@@ -2262,7 +2262,7 @@ void SQLiteConstructor::saturation_tests(vector<string> taxon_ids_to_be_tested, 
 								n_single_taxon_children++;
 						}
 
-						// only explode the taxon if there is at least one multi-taxon child, and not too many singletons
+						// only explode the genus if there is at least one multi-taxon child, and not too many singletons
 						if (n_children > n_single_taxon_children && n_single_taxon_children <= MAX_ONE_TAXON_CHILD_ALNS) {
 							explode_taxon = true;
 						} else {

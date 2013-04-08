@@ -37,6 +37,7 @@ class SQLiteDBController{
 private:
     string db_name;
     string division;
+    string refseq;
     int count;
     map<int,vector<int> > parent_ncbi_map;
     int rebuild_tree(int,int,sqlite3 *);
@@ -46,7 +47,7 @@ private:
 public:
     SQLiteDBController(string dbn);
     bool initiate();
-    void load_seqs(string div,bool downl);
+    void load_seqs(string div, string ref, bool downl);
     string get_sci_name_for_ncbi_tax_id(int ncbi_tax_id);
     string get_rank_for_ncbi_tax_id(int ncbi_tax_id);
 };
