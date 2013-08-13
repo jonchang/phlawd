@@ -324,7 +324,6 @@ void SQLiteConstructor::set_user_fasta_file(string filename, bool skipdbcheck) {
 
 int SQLiteConstructor::run() {
 
-	// not sure what is going on here....
 	string logn = gene_name + ".log";
 	logfile.open(logn.c_str());
 	string gin = gene_name + ".gi";
@@ -362,8 +361,6 @@ int SQLiteConstructor::run() {
 				<< preexisting_user_seqs_names.size() << " user-supplied ones" << endl;
 
 	} else { // not an update run
-
-		// not sure what is going on here....
 
 		gifile.open(gin.c_str(), fstream::out);
 		gifile << "ncbi_tax_id\tgi_number\tedited_name" << endl;
@@ -1328,7 +1325,7 @@ void SQLiteConstructor::get_best_hits_openmp_SWPS3_justquery(vector<Sequence> & 
 	vector<double> justqueryvec2;
 	vector<string> justqueryname;
 
-#pragma omp parallel for shared(keep_seqs_rc_map,justqueryvec,justqueryvec2,justqueryname)
+//#pragma omp parallel for shared(keep_seqs_rc_map,justqueryvec,justqueryvec2,justqueryname)
 	for (int i = 0; i < seqs_to_score.size(); i++) {
 		double maxide = 0;
 		double maxcov = 0;
@@ -1390,7 +1387,7 @@ void SQLiteConstructor::get_best_hits_openmp_SWPS3(vector<Sequence> & seqs, vect
 		known_scores.push_back(get_swps3_score_and_rc_cstyle(mat, &known_seqs->at(i), &known_seqs->at(i)));
 	}
 	map<Sequence*, bool> keep_seqs_rc_map;
-#pragma omp parallel for shared(keep_seqs_rc_map)
+//#pragma omp parallel for shared(keep_seqs_rc_map)
 	for (int i = 0; i < seqs.size(); i++) {
 		double maxide = 0;
 		double maxcov = 0;

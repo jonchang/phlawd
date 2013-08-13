@@ -1,4 +1,11 @@
 *.o
 *.d
 .gitignore
+.autotools
+.cproject
+.project
+.settings
+EDNAFULL
+PHLAWD
+tests
 examples/*
