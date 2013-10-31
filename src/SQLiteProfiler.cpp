@@ -163,7 +163,7 @@ void SQLiteProfiler::run() {
 //		finalaln
 	} else {
 		final_alignment_dbid = 1;
-		clean_dbseqs(1);
+		clean_dbseqs(1); // seems redundant but is useful if we have added leftovers
 	}
 
 	if (doing_update == true)
@@ -532,7 +532,7 @@ void SQLiteProfiler::clean_aligned_sequences(vector<Sequence> & seqs, float site
 		}
 
 		// check if seq has too much missing data
-		// TODO: replace obnoxious alerts for with mechanism to record the sequences
+		// TODO: replace obnoxious alerts with mechanism to record the sequences
 		if ((n_empty_cells / seqlength) > seq_threshold) {
 			if (n_empty_cells == seqlength)
 				cout << "\n!\n!\n!\n!\nsequence for " << seqs[i].get_taxon_name() << " is completely empty!\n!\n!\n!\n!" << endl;
@@ -574,7 +574,10 @@ void SQLiteProfiler::clean_alignment(string filename) {
 	fu.writeFileFromVector(profile_dir_fname + filename, tempalseqs);
 }
 
-/* clean sequences from a profile alignment and write them back into the database */
+/* this was breaking, and is only called when there is just one alignment
+ * (no profiling), so not sure we need it... */
+
+/* clean sequences from a profile alignment and write them back into the database  */
 void SQLiteProfiler::clean_dbseqs(int profile_id) {
 
 	double site_threshold = 0.9; // TODO: make these user-settable
@@ -587,7 +590,8 @@ void SQLiteProfiler::clean_dbseqs(int profile_id) {
 	cout << "cleaning database seqs for profile " << profile_id << endl;
 	clean_aligned_sequences(tempalseqs, site_threshold, seq_threshold);
 
-	/* this should be the same as above,
+	/* this should be the same as above
+     * 
 	 int seqlength = tempalseqs[0].get_aligned_seq().size();
 	 float fseql = float(tempalseqs.size());
 	 vector<int> removeem;
@@ -609,7 +613,9 @@ void SQLiteProfiler::clean_dbseqs(int profile_id) {
 	 a += tempalseqs[i].get_aligned_seq()[j];
 	 }
 	 tempalseqs[i].set_aligned_seq(a);
-	 } */
+	 }
+     * 
+     */
 
 	gene_db.update_profile_align_seqs(profile_id, tempalseqs);
 }

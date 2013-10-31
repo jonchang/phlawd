@@ -84,6 +84,7 @@ private:
     string usertreefile;
     Tree * userguidetree;
     bool userfasta;
+    bool labelUserSequences;
     string userfastafile;
     bool userskipsearchdb;
     bool skipdbcheck;
@@ -147,7 +148,7 @@ public:
     SQLiteConstructor(string cn, vector <string> searchstr, bool searchlit, string genen, string genedb,
 		      double mad_cut,double cover, double ident, string dbs,
 		      string known_seq_filen, bool its, int numt,bool autom,
-		      bool updb, string updf, bool ignoreleft, int shrinkthresh); // TODO: create a parameters struct that holds all this crap so we can just pass that
+		      bool updb, string updf, bool ignoreleft, int shrinkthresh, bool labeluserseqs); // TODO: create a parameters struct that holds all this crap so we can just pass that
     ~SQLiteConstructor(){}
     void set_only_names_from_file(string filename, bool containshi, bool containswild);
     void set_exclude_names_from_file(string filename, bool, bool);

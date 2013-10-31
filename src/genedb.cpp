@@ -15,6 +15,7 @@
 #include "sequence.h"
 
 #define NOT_YET_PROFILED -1;
+#define NO_TAX_ID "-1";
 
 using namespace std;
 
@@ -65,6 +66,8 @@ void GeneDB::execute_query(sqlite3 * db, const char * query) {
 
 	int rc;
 	char *zErrMsg = 0;
+
+//    cout << "attempting to execute query string: " << query << endl;
 
 	rc = sqlite3_exec(db, query, 0, 0, &zErrMsg);
 	if (rc != SQLITE_OK) {
@@ -173,8 +176,16 @@ int GeneDB::insert_sequence(sqlite3 * db, Sequence & seq) {
 	 */
 
 	string sql = "insert into sequences (ncbi_tax_id, gi, tax_name, is_user_seq, sequence) values (";
-	sql += seq.get_ncbi_tax_id() + ",'";
-	sql += seq.get_ncbi_gi_number() + "','";
+	
+    string tax_id = NO_TAX_ID;
+    if (seq.get_ncbi_tax_id().length() > 0) {
+        if (isdigit(seq.get_ncbi_tax_id().at(0))) {
+            tax_id = seq.get_ncbi_tax_id();
+        }
+    }
+	
+    sql += tax_id + ",'";
+    sql += seq.get_ncbi_gi_number() + "','";
 	sql += seq.get_taxon_name() + "',";
 	sql += to_string(seq.is_user_seq()) + ",'";
 	sql += seq.get_sequence() + "');";
@@ -513,6 +524,7 @@ int GeneDB::add_original_alignment(string & filename, vector<Sequence> * dbseqs,
 
 		// now the user seqs
 		for (int i = 0; i < userseqs->size(); i++) {
+//            cout << "adding sequence: " << userseqs->at(i).get_taxon_name() << endl;
 			int sequence_id = userseqs->at(i).get_sqlite_id();
 			string sequence = userseqs->at(i).get_aligned_seq();
 			insert_sequence_alignment_map(db, sequence_id, new_alignment_id, sequence);
@@ -761,6 +773,8 @@ void GeneDB::update_align_seqs(int alignment_id, vector<Sequence> & seqs) {
 	 * uses the get_sqlite_id and the get_aligned_seq
 	 */
 
+//    cout << "attempting to update " << seqs.size() << " seqs" << endl;
+
 	sqlite3 * db;
 	if (sqlite3_open(name.c_str(), &db) == SQLITE_OK) {
 		begin_transaction(db);
@@ -771,6 +785,9 @@ void GeneDB::update_align_seqs(int alignment_id, vector<Sequence> & seqs) {
 			sql += " where alignment_id = ";
 			sql += to_string(alignment_id) + " and sequence_id = ";
 			sql += to_string(seqs[i].get_sqlite_id()) + ";";
+            
+//            cout << endl << endl << sql << endl << endl;
+            
 			execute_query(db, sql);
 		}
 		commit_transaction(db);
@@ -797,8 +814,9 @@ void GeneDB::update_profile_align_seqs(int alignid, vector<Sequence> & seqs) {
 			sql += " where profile_id = ";
 			sql += to_string(alignid) + " and sequence_id = ";
 			sql += to_string(seqs[i].get_sqlite_id()) + ";";
+
+//			cout << endl << endl << sql << endl << endl;
 			execute_query(db, sql);
-			//cout << rc << " " << sql << endl;
 		}
 
 		commit_transaction(db);

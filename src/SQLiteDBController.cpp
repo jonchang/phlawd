@@ -162,6 +162,14 @@ string SQLiteDBController::create_edited_name(string & tfilen) {
 		tfilen.replace(found, 1, "_");
 		found = tfilen.find(" ", found + 2);
 	}
+
+    string badchars = "~`!@#$%^&*()+={[}]:;\"'<,>.?/|\\";
+    
+    for (int i = 0; i < badchars.length(); i++) {
+        replaceChar(tfilen, badchars.at(i));
+    } 
+
+    /*
 	//(take out the parenthetical stuff too)
 	found = tfilen.find("(");
 	while (found != string::npos) {
@@ -213,7 +221,20 @@ string SQLiteDBController::create_edited_name(string & tfilen) {
 		tfilen.replace(found, 1, "_");
 		found = tfilen.find(";", found + 1);
 	}
+    found = tfilen.find(":");
+	while (found != string::npos) {
+		tfilen.replace(found, 1, "_");
+		found = tfilen.find(":", found + 1);
+	} */
 	return tfilen;
+}
+
+void SQLiteDBController::replaceChar(string & instring, char s) {
+    size_t found = instring.find(s);
+	while (found != string::npos) {
+		instring.replace(found, 1, "_");
+		found = instring.find(s, found + 1);
+	}
 }
 
 /*ednm = spls[1].replace('\"',"_").strip()

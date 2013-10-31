@@ -122,6 +122,7 @@ void Sequence::parse_label(string label, bool is_user_fasta) {
 	// case 1: when reading in the user sequences, we treat the entire label as the taxon name
 	if (is_user_fasta) {
 		set_taxon_name(label);
+        set_ncbi_tax_id("");
 		set_is_user_seq(true);
 
 	// case 2: when reading in an alignment with phlawd-formatted labels
@@ -242,21 +243,19 @@ string Sequence::get_source() {
 
 string Sequence::get_aligned_seq() {
 	if (is_aligned() == false) {
-		cerr << "invalid request for an aligned sequence from an unaligned sequence object" << endl;
-		exit(1);
-
-	} else
+		throw "Attempt to retrieve an aligned sequence from a sequence object that does not contain one. This usually means there is a problem with an input file.";
+	} else {
 		return aligned_seq;
+    }
 }
 
 string Sequence::get_unaligned_seq() {
 	string seq = unaligned_seq;
 	if (seq.compare((string)"") == 0) {
-		cerr << "invalid request for an unaligned sequence from a sequence object that does not contain one" << endl;
-		exit(1);
-
-	} else
+		throw "Attempt to retrieve an unaligned sequence from a sequence object that does not contain one. This usually means there is a problem with an input file.";
+	} else {
 		return unaligned_seq;
+    }
 }
 
 /*

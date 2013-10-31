@@ -91,7 +91,8 @@ SQLiteConstructor::SQLiteConstructor(
 		bool inupdatedb,
 		string inupdatefile,
 		bool assignleft,
-		int shrinkthresh) :
+		int shrinkthresh,
+        bool labeluserseqs):
 		clade_name(cn),
 				search(searchstr),
 				searchliteral(searchlit),
@@ -107,7 +108,8 @@ SQLiteConstructor::SQLiteConstructor(
 				updateDB(inupdatedb),
 				userfasta(false),
 				assignleftovers(assignleft),
-				shrinkablethreshold(shrinkthresh) {
+				shrinkablethreshold(shrinkthresh),
+                labelUserSequences(labeluserseqs){
 
 	FastaUtil seqReader;
 	//added updating seqs from db
@@ -296,10 +298,17 @@ void SQLiteConstructor::set_user_fasta_file(string filename, bool skipdbcheck) {
 			if (nameset == true) {
 				user_seqs->at(i).set_ncbi_tax_id(nameval);
 				cout << tname << "=" << nameval << endl;
+                
 			} else {
 				cerr << tname << " is not in the ncbi database as a number or name" << endl;
 //				user_seqs->at(i).set_ncbi_tax_id("0"); // this should already be set as 0 by the sequence constructor
 			}
+            
+            if (labelUserSequences) {
+                // will ensure the name doesn't conflict with other sequences for this taxon
+                // but there will be duplicates and user seqs won't be chimera-izable with gb seqs from other alignments
+                user_seqs->at(i).set_taxon_name(tname + "_usersequence");
+            }
 		}
 	}
 	if (usertree == true) {
@@ -1433,6 +1442,48 @@ void SQLiteConstructor::get_best_hits_openmp_SWPS3(vector<Sequence> & seqs, vect
 	}
 }
 
+/* adds guide sequences with taxon names found in the gb taxonomy to the set of sequence
+ * to be aligned.
+ * 
+ * this is wildly inefficient in its current implementation. should be refactored to
+ * use hashset data structures for fast lookups. */
+/*void SQLiteConstructor::replace_gb_seqs_with_guide_seqs(vector<Sequence> * known_seqs, vector<Sequence> * in_seqs) {
+    
+    // get names of all guide seqs
+    for (unsigned int i = 0; i < known_seqs->size(); i++) {
+        
+        in_seqs.push_back(known_seqs->at(i));
+    }
+    
+/*    // compare gb seqs to guide seqs
+	for (unsigned int i = in_seqs->size() - 1; i >= 0 ; i--) {
+
+        string cur_name = in_seqs->at(i).get_taxon_name();
+
+        // first check if we've seen this name yet
+        if (known_seqs_names_saved.find(cur_name) != known_seqs_names.end()) {
+
+            // we have seen this name in the guide seqs, erase this gb seq
+            in_seqs->erase(in_seqs->begin() + i - 1);
+
+        } else {
+        
+            // have not seen name yet, check if it is in the guide seqs
+            if (known_seqs_names.find(cur_name) != known_seqs_names.end()) {
+                
+                // name is in guide seqs, erase this gb seq
+                known_seqs_names_saved.insert(cur_name);
+                in_seqs->erase(in_seqs->begin() + i - 1);
+
+            }            
+        }
+    }
+
+    for (unsigned int i = 0; i < known_seqs->size(); i++) {
+        in_seqs->push_back(known_seqs->at(i));
+    } 
+} */
+
 void SQLiteConstructor::remove_duplicates_SWPS3(vector<Sequence> * keep_seqs) {
 	vector<string> ids;
 	vector<string> unique_ids;
@@ -2176,7 +2227,7 @@ void SQLiteConstructor::saturation_tests(vector<string> taxon_ids_to_be_tested, 
 					remove_seq_from_vector_by_taxon_name(&seqs_to_be_assigned, test_tax_user_child_seqs->at(0).get_taxon_name());
 				}
 
-				// add the alignment to the db
+				// add the alignment record to the db
 				int alignid = gene_db.add_original_alignment(tax_id_to_test, test_tax_db_child_seqs, test_tax_user_child_seqs);
 				if (updateDB == true)
 					gene_db.toggle_alignment_update(alignid);
@@ -2283,18 +2334,22 @@ void SQLiteConstructor::saturation_tests(vector<string> taxon_ids_to_be_tested, 
 					}
 					// user seqs
 					for (int i = 0; i < test_tax_user_child_seqs->size(); i++) {
+//                        cout << "extracting user sequence from alignment by name: " << test_tax_user_child_seqs->at(i).get_taxon_name() << endl;
 						remove_seq_from_vector_by_taxon_name(&seqs_to_be_assigned, test_tax_user_child_seqs->at(i).get_taxon_name());
 					}
 					int alignid = gene_db.add_original_alignment(tax_id_to_test, test_tax_db_child_seqs, test_tax_user_child_seqs);
-					if (updateDB == true)
+					if (updateDB == true) {
 						gene_db.toggle_alignment_update(alignid);
+                    }
 					original_alignments_added.push_back(alignid);
 				}
 			}
 			delete (test_tax_db_child_seqs);
 			delete (test_tax_user_child_seqs);
-		} //END NCBI SATURATION
-	} else { //user guide tree
+            
+		} // END NCBI SATURATION
+        
+	} else { // user guide tree
 		/*
 		 * The idea here is to use the tree structure as the guide for the alignment and the
 		 * breaking up of the groups. So the steps are
@@ -2449,10 +2504,11 @@ void SQLiteConstructor::saturation_tests(vector<string> taxon_ids_to_be_tested, 
 			string best_aln_tax_name = dbc.get_sci_name_for_ncbi_tax_id(atoi(best_aln_db_name.c_str()));
 
 			cout << "adding leftover seq for " << this_leftover.get_taxon_name();
-			if (this_leftover.is_user_seq())
+			if (this_leftover.is_user_seq()) {
 				cout << " (user sequence)";
-			else
+			} else {
 				cout << " (gi " << this_leftover.get_ncbi_gi_number() << ")";
+            }
 			cout << " to " + best_aln_tax_name << endl;
 
 			// get all the seqs for the best matching alignment and make a new alignment including this leftover
@@ -2470,6 +2526,10 @@ void SQLiteConstructor::saturation_tests(vector<string> taxon_ids_to_be_tested, 
 			load_sequences_from_last_alignment_into(aligned_seqs);
 
 			gene_db.update_align_seqs(best_aln_for_this_leftover, aligned_seqs);
+            
+/*            if (i > 5) {
+                exit(0);
+            } */
 
 			if (updateDB == true)
 				gene_db.toggle_alignment_update(original_alignments_added[best_match]);
@@ -2652,12 +2712,18 @@ void SQLiteConstructor::update_seqs_using_last_alignment(vector<Sequence> * db_s
 	FastaUtil fu;
 	vector<Sequence> aligned_seqs;
 	string outfile = genefoldername + "outfile";
-	fu.read_aligned_fasta_into(aligned_seqs, outfile);
+	fu.read_aligned_fasta_into(aligned_seqs, outfile); // look here next...
 	for (int i = 0; i < aligned_seqs.size(); i++) {
+
 		bool set = false;
+        
+//        cout << "adding to incoming sequences: " << aligned_seqs.at(i).get_taxon_name() << "... ";
+        
+        /*
 		for (int j = 0; j < db_seqs_to_update->size(); j++) {
 			if (aligned_seqs[i].get_ncbi_tax_id() == db_seqs_to_update->at(j).get_ncbi_tax_id()) {
 				db_seqs_to_update->at(j).set_aligned_sequence(aligned_seqs[i].get_sequence());
+                cout << "added to db seqs" << endl;
 				set = true;
 				break;
 			}
@@ -2666,11 +2732,33 @@ void SQLiteConstructor::update_seqs_using_last_alignment(vector<Sequence> * db_s
 			for (int j = 0; j < user_seqs_to_update->size(); j++) {
 				if (aligned_seqs[i].get_taxon_name() == user_seqs_to_update->at(j).get_taxon_name()) {
 					user_seqs_to_update->at(j).set_aligned_sequence(aligned_seqs[i].get_sequence());
+                    cout << "added to user seqs" << endl;
 					set = true;
 					break;
 				}
 			}
-		}
+		} */
+
+        if (aligned_seqs[i].is_user_seq() == true) {
+            for (int j = 0; j < user_seqs_to_update->size(); j++) {
+				if (aligned_seqs[i].get_taxon_name() == user_seqs_to_update->at(j).get_taxon_name()) {
+					user_seqs_to_update->at(j).set_aligned_sequence(aligned_seqs[i].get_sequence());
+//                    cout << "added to user seqs" << endl;
+                    set = true;
+					break;
+				}
+			}
+        } else { // not a user sequence
+            for (int j = 0; j < db_seqs_to_update->size(); j++) {
+                if (aligned_seqs[i].get_ncbi_tax_id() == db_seqs_to_update->at(j).get_ncbi_tax_id()) {
+                    db_seqs_to_update->at(j).set_aligned_sequence(aligned_seqs[i].get_sequence());
+//                    cout << "added to db seqs" << endl;
+                    set = true;
+                    break;
+                }
+            }
+        }
+        
 		if (set == false) {
 			cout << "error, could not find match for " << aligned_seqs[i].get_taxon_name() << ". phlawd will exit" << endl;
 			exit(1);
@@ -2718,9 +2806,9 @@ void SQLiteConstructor::retrieve_aligned_sequence_from_last_alignment_for_seq(Se
 void SQLiteConstructor::load_sequences_from_last_alignment_into(vector<Sequence> & seqs) {
 
 	FastaUtil fu;
-	vector<Sequence> tempalseqs;
+//	vector<Sequence> tempalseqs;
 	string outfile = genefoldername + "outfile";
-	fu.read_aligned_fasta_into(tempalseqs, outfile);
+	fu.read_aligned_fasta_into(seqs, outfile);
 
 	/*	this is just duplicting effort
 	 for (int i = 0; i < tempalseqs.size(); i++) {

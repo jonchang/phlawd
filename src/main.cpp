@@ -131,6 +131,7 @@ int main(int argc, char* argv[]) {
 	    string usertreefile = "";//guide tree
 	    Tree * usertreeobj;
 	    bool userfasta = false;
+        bool labeluserseqs = false;
 	    string userfastafile = "";
 	    bool userskipdb = false;
 	    bool userskipsearch = false;
@@ -224,6 +225,8 @@ int main(int argc, char* argv[]) {
 		    userfasta = true;
 		    userfastafile = tokens[1];
 		    cout << "user fasta file: "<<userfastafile <<endl;
+        }else if(!strcmp(tokens[0].c_str(), "labeluserfastaseqs")){
+		    labeluserseqs = true;
 		}else if(!strcmp(tokens[0].c_str(), "userskipdb")){
 		    userskipdb = true;
 		    cout << "skipping ncbi database check" << endl;
@@ -262,7 +265,7 @@ int main(int argc, char* argv[]) {
 	    if(asse == true){
 		cout << "assembly" << endl;
 		SQLiteConstructor * a;
-		a = new SQLiteConstructor(clade, search, searchliteral, gene, genedb, mad, coverage, identity, db, knownfile, useITS, numthreads, automated, updateDB, updatef, assignleft, shrinkthresh);
+		a = new SQLiteConstructor(clade, search, searchliteral, gene, genedb, mad, coverage, identity, db, knownfile, useITS, numthreads, automated, updateDB, updatef, assignleft, shrinkthresh, labeluserseqs);
 		cout << "number of threads: " << a->get_numthreads() << endl;
 		omp_set_num_threads(a->get_numthreads());
 		cout << "search clade: " << a->get_cladename() << endl;
