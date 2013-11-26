@@ -279,6 +279,7 @@ void SQLiteConstructor::set_user_fasta_file(string filename, bool skipdbcheck) {
 		cout << "trying to match sequence names to ncbi taxon names " << endl;
 
 		set<string> matched_ncbi_ids;
+		set<string> observed_unmatched_names;
 
 		for (int i = 0; i < user_seqs->size(); i++) {
 //			string tname = user_seqs->at(i).get_label().substr(5, user_seqs->at(i).get_label().size());
@@ -298,20 +299,31 @@ void SQLiteConstructor::set_user_fasta_file(string filename, bool skipdbcheck) {
 				count1 += 1;
 			}
 			query.free_result();
+
+			// if we found a taxon, record it
 			if (nameset == true) {
 
+				// but don't allow multiple sequences for the same taxon
 				if (matched_ncbi_ids.find(nameval) == matched_ncbi_ids.end()) {
 					user_seqs->at(i).set_ncbi_tax_id(nameval);
 					cout << tname << "=" << nameval << endl;
 					matched_ncbi_ids.insert(nameval);
 				} else {
-					cerr << "\nNo more than one user sequence may be defined for any ncbi taxon, but there are at least two sequences matching " << tname << " = " << nameval << "." << endl <<
-							"To include multiple user sequences within an ncbi taxon, they must have unique names." << endl << endl;
+					cerr << endl << "No more than one user sequence may be defined for any ncbi taxon, but there are at least two sequences matching: " << tname << " = " << nameval << "." << endl << endl;
 					exit(0);
 				}
+
+			// didn't find an ncbi taxon
 			} else {
-				cout << tname << " is not in the ncbi database as a number or name" << endl;
-//				user_seqs->at(i).set_ncbi_tax_id("0"); // this should already be set as 0 by the sequence constructor
+
+				// don't allow identical sequence names
+				if (observed_unmatched_names.find(tname) == observed_unmatched_names.end()) {
+					cout << tname << " is not in the ncbi database as a number or name" << endl;
+					observed_unmatched_names.insert(tname);
+				} else {
+					cerr << endl << "User sequence names must be unique. There are at least two sequences named: " << tname << "." << endl << endl;
+					exit(0);
+				}
 			}
             
             if (labelUserSequences) {
