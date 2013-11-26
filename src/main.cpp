@@ -124,6 +124,8 @@ int main(int argc, char* argv[]) {
 	    bool updateFILE = false;
 	    bool assignleft = false;
 	    int shrinkthresh = 5000;
+        float missingthresh_site = 0.9;
+        float missingthresh_seq = 0.95;
 	    string updatef = "";
 	    string maskurl = "";
 	    string genedb;
@@ -133,7 +135,7 @@ int main(int argc, char* argv[]) {
 	    bool userfasta = false;
         bool labeluserseqs = false;
 	    string userfastafile = "";
-	    bool userskipdb = false;
+        bool userskipdb = false;
 	    bool userskipsearch = false;
 	    //for outlier
 	    double taxcutoff = 4;//number above
@@ -207,6 +209,15 @@ int main(int argc, char* argv[]) {
 		    numthreads = atoi(tokens[1].c_str());
 		}else if(!strcmp(tokens[0].c_str(),  "shrinkablethreshold")){
 		    shrinkthresh = atoi(tokens[1].c_str());
+
+		}else if(!strcmp(tokens[0].c_str(), "missingthresh_site")){
+            missingthresh_site = atof(tokens[1].c_str());
+		    cout << "maximum missing data proportion for sites: " << missingthresh_site << endl;
+
+		}else if(!strcmp(tokens[0].c_str(), "missingthresh_seq")){
+            missingthresh_seq = atof(tokens[1].c_str());
+		    cout << "maximum missing data proportion for seqs: " << missingthresh_seq << endl;
+
 		}else if(!strcmp(tokens[0].c_str(), "gbmask")){
 		    maskurl = tokens[1];
 		}else if(!strcmp(tokens[0].c_str(), "updateDB")){
@@ -224,7 +235,6 @@ int main(int argc, char* argv[]) {
 		}else if(!strcmp(tokens[0].c_str(), "userfasta")){
 		    userfasta = true;
 		    userfastafile = tokens[1];
-		    cout << "user fasta file: "<<userfastafile <<endl;
         }else if(!strcmp(tokens[0].c_str(), "labeluserfastaseqs")){
 		    labeluserseqs = true;
 		}else if(!strcmp(tokens[0].c_str(), "userskipdb")){
@@ -333,7 +343,7 @@ int main(int argc, char* argv[]) {
 	     */
 	    if(prof == true){
 		SQLiteProfiler * b;
-		b = new SQLiteProfiler(gene,genedb,clade,db,automated,updateDB);
+		b = new SQLiteProfiler(gene, genedb, clade, db, automated, updateDB, missingthresh_site, missingthresh_seq);
 		b->prelimalign();
 		if(usertree == true && asse == true){
 		    b->set_user_guide_tree(usertreeobj);

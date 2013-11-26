@@ -43,6 +43,8 @@ private:
 	bool automated;									// ?
 	bool doing_update;								// are we performing an update
 	bool using_guide_tree;							// do we have a user-supplied guide tree
+	float missing_data_thresh_for_sites;			// the maximum proportion of missing data allowed before a site is excised
+	float missing_data_thresh_for_seqs;				// the maximum proportion of missing data allowed before a site is excised
 
 	int final_alignment_dbid;						// the fully-inclusive profile alignment
 
@@ -99,7 +101,7 @@ private:
 
 public:
 	SQLiteProfiler(string gn, string gene_dbn, string cn, string dbs,
-			bool autom, bool updb);
+			bool autom, bool updb, float missing_data_thresh_for_sites, float missing_data_thresh_for_seqs);
 	void prelimalign();
 	void run();
 	void set_user_guide_tree(Tree * tree);

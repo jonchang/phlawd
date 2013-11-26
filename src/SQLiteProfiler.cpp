@@ -64,8 +64,8 @@ inline std::string to_string(const T& t) {
 	return ss.str();
 }
 
-SQLiteProfiler::SQLiteProfiler(string gn, string gene_dbn, string cn, string dbs, bool autom, bool updb) :
-		gene_name(gn), gene_db_fname(gene_dbn), clade_name(cn), source_db_fname(dbs), automated(autom), doing_update(updb) {
+SQLiteProfiler::SQLiteProfiler(string gn, string gene_dbn, string cn, string dbs, bool autom, bool updb, float missingthresh_site, float missingthresh_seq) :
+		gene_name(gn), gene_db_fname(gene_dbn), clade_name(cn), source_db_fname(dbs), automated(autom), doing_update(updb), missing_data_thresh_for_sites(missingthresh_site), missing_data_thresh_for_seqs(missingthresh_seq) {
 	use_orphan = false;
 	using_guide_tree = false;
 	user_guide_tree = NULL;
@@ -557,8 +557,8 @@ void SQLiteProfiler::clean_alignment(string filename) {
 	 * getting unwieldy.
 	 */
 
-	double site_threshold = 0.9; // TODO: make these user-settable
-	double seq_threshold = 0.95;
+//	double site_threshold = 0.9; // TODO: make these user-settable
+//	double seq_threshold = 0.95;
 
 	// read the alignment into tempalseqs
 	FastaUtil fu;
@@ -567,7 +567,7 @@ void SQLiteProfiler::clean_alignment(string filename) {
 	fu.read_aligned_fasta_into(tempalseqs, aln_fname);
 
 //	cout << "cleaning seqs in " << filename << endl;
-	clean_aligned_sequences(tempalseqs, site_threshold, seq_threshold);
+	clean_aligned_sequences(tempalseqs, missing_data_thresh_for_sites, missing_data_thresh_for_seqs);
 
 	// remove the input (dirty) file, replace it with the clean one
 	remove((profile_dir_fname + filename).c_str());
