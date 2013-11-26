@@ -2758,7 +2758,7 @@ void SQLiteConstructor::update_seqs_using_last_alignment(vector<Sequence> * db_s
             for (int j = 0; j < user_seqs_to_update->size(); j++) {
 				if (aligned_seqs[i].get_taxon_name() == user_seqs_to_update->at(j).get_taxon_name()) {
 
-		        	cout << "updating user sequence: " << aligned_seqs[i].get_taxon_name() << endl;
+//		        	cout << "updating user sequence: " << aligned_seqs[i].get_taxon_name() << endl;
 
 					user_seqs_to_update->at(j).set_aligned_sequence(aligned_seqs[i].get_sequence());
 //                    cout << "added to user seqs" << endl;
@@ -2770,7 +2770,7 @@ void SQLiteConstructor::update_seqs_using_last_alignment(vector<Sequence> * db_s
             for (int j = 0; j < db_seqs_to_update->size(); j++) {
                 if (aligned_seqs[i].get_ncbi_tax_id() == db_seqs_to_update->at(j).get_ncbi_tax_id()) {
 
-                	cout << "updating db sequence: " << aligned_seqs[i].get_ncbi_tax_id() << endl;
+//                	cout << "updating db sequence: " << aligned_seqs[i].get_ncbi_tax_id() << endl;
 
                     db_seqs_to_update->at(j).set_aligned_sequence(aligned_seqs[i].get_sequence());
 //                    cout << "added to db seqs" << endl;

@@ -524,7 +524,7 @@ int GeneDB::add_original_alignment(string & aln_name, vector<Sequence> * dbseqs,
 
 		// now the user seqs
 		for (int i = 0; i < userseqs->size(); i++) {
-            cout << "adding sequence: " << userseqs->at(i).get_taxon_name() << endl;
+//            cout << "adding sequence: " << userseqs->at(i).get_taxon_name() << endl;
 			int sequence_id = userseqs->at(i).get_sqlite_id();
 			string sequence = userseqs->at(i).get_aligned_seq();
 			insert_sequence_alignment_map(db, sequence_id, new_alignment_id, sequence);
