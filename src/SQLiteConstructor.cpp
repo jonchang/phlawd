@@ -277,6 +277,9 @@ void SQLiteConstructor::set_user_fasta_file(string filename, bool skipdbcheck) {
 		Database conn(db);
 		//TODO: need to make this faster
 		cout << "trying to match sequence names to ncbi taxon names " << endl;
+
+		set<string> matched_ncbi_ids;
+
 		for (int i = 0; i < user_seqs->size(); i++) {
 //			string tname = user_seqs->at(i).get_label().substr(5, user_seqs->at(i).get_label().size());
 
@@ -296,11 +299,18 @@ void SQLiteConstructor::set_user_fasta_file(string filename, bool skipdbcheck) {
 			}
 			query.free_result();
 			if (nameset == true) {
-				user_seqs->at(i).set_ncbi_tax_id(nameval);
-				cout << tname << "=" << nameval << endl;
-                
+
+				if (matched_ncbi_ids.find(nameval) == matched_ncbi_ids.end()) {
+					user_seqs->at(i).set_ncbi_tax_id(nameval);
+					cout << tname << "=" << nameval << endl;
+					matched_ncbi_ids.insert(nameval);
+				} else {
+					cerr << "\nNo more than one user sequence may be defined for any ncbi taxon, but there are at least two sequences matching " << tname << " = " << nameval << "." << endl <<
+							"To include multiple user sequences within an ncbi taxon, they must have unique names." << endl << endl;
+					exit(0);
+				}
 			} else {
-				cerr << tname << " is not in the ncbi database as a number or name" << endl;
+				cout << tname << " is not in the ncbi database as a number or name" << endl;
 //				user_seqs->at(i).set_ncbi_tax_id("0"); // this should already be set as 0 by the sequence constructor
 			}
             
@@ -2252,7 +2262,7 @@ void SQLiteConstructor::saturation_tests(vector<string> taxon_ids_to_be_tested, 
 					mad = mad_cutoff + 1;
 				}
 
-				cout << "mad: " << mad << endl;
+				cout << "mad: " << mad << endl; // TODO: fix this so that if the alignment is too large it says that
 
 				// check the mad score and decide what to do with the alignment
 				bool add_alignment = false;
@@ -2328,19 +2338,24 @@ void SQLiteConstructor::saturation_tests(vector<string> taxon_ids_to_be_tested, 
 
 				// if the mad score was good or we refused to break up a genus
 				if (add_alignment) {
+
+					// read in the seqs from the last alignment
 					update_seqs_using_last_alignment(test_tax_db_child_seqs, test_tax_user_child_seqs);
+
+					// remove the seqs we are assigning from the to-be-assigned vector
 					for (int i = 0; i < test_tax_db_child_seqs->size(); i++) {
 						remove_seq_from_vector_by_taxon_name(&seqs_to_be_assigned, test_tax_db_child_seqs->at(i).get_taxon_name());
 					}
-					// user seqs
 					for (int i = 0; i < test_tax_user_child_seqs->size(); i++) {
 //                        cout << "extracting user sequence from alignment by name: " << test_tax_user_child_seqs->at(i).get_taxon_name() << endl;
 						remove_seq_from_vector_by_taxon_name(&seqs_to_be_assigned, test_tax_user_child_seqs->at(i).get_taxon_name());
 					}
+
 					int alignid = gene_db.add_original_alignment(tax_id_to_test, test_tax_db_child_seqs, test_tax_user_child_seqs);
 					if (updateDB == true) {
 						gene_db.toggle_alignment_update(alignid);
                     }
+
 					original_alignments_added.push_back(alignid);
 				}
 			}
@@ -2742,6 +2757,9 @@ void SQLiteConstructor::update_seqs_using_last_alignment(vector<Sequence> * db_s
         if (aligned_seqs[i].is_user_seq() == true) {
             for (int j = 0; j < user_seqs_to_update->size(); j++) {
 				if (aligned_seqs[i].get_taxon_name() == user_seqs_to_update->at(j).get_taxon_name()) {
+
+		        	cout << "updating user sequence: " << aligned_seqs[i].get_taxon_name() << endl;
+
 					user_seqs_to_update->at(j).set_aligned_sequence(aligned_seqs[i].get_sequence());
 //                    cout << "added to user seqs" << endl;
                     set = true;
@@ -2751,6 +2769,9 @@ void SQLiteConstructor::update_seqs_using_last_alignment(vector<Sequence> * db_s
         } else { // not a user sequence
             for (int j = 0; j < db_seqs_to_update->size(); j++) {
                 if (aligned_seqs[i].get_ncbi_tax_id() == db_seqs_to_update->at(j).get_ncbi_tax_id()) {
+
+                	cout << "updating db sequence: " << aligned_seqs[i].get_ncbi_tax_id() << endl;
+
                     db_seqs_to_update->at(j).set_aligned_sequence(aligned_seqs[i].get_sequence());
 //                    cout << "added to db seqs" << endl;
                     set = true;

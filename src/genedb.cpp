@@ -492,7 +492,7 @@ int GeneDB::add_empty_intermediate_profile(int child1_id, int child2_id) {
  }
  */
 
-int GeneDB::add_original_alignment(string & filename, vector<Sequence> * dbseqs, vector<Sequence> * userseqs) {
+int GeneDB::add_original_alignment(string & aln_name, vector<Sequence> * dbseqs, vector<Sequence> * userseqs) {
 
 	/* creates a new alignment record in the database 'alignments' table,
 	 * and adds records to the sequence_alignment_map table to associate
@@ -512,7 +512,7 @@ int GeneDB::add_original_alignment(string & filename, vector<Sequence> * dbseqs,
 		begin_transaction(db);
 
 		// first create a new alignment record
-		new_alignment_id = insert_alignment(db, filename, 0);
+		new_alignment_id = insert_alignment(db, aln_name, 0);
 		cout << "adding alignment to database: " << new_alignment_id << endl;
 
 		// now add the dbseqs
@@ -524,7 +524,7 @@ int GeneDB::add_original_alignment(string & filename, vector<Sequence> * dbseqs,
 
 		// now the user seqs
 		for (int i = 0; i < userseqs->size(); i++) {
-//            cout << "adding sequence: " << userseqs->at(i).get_taxon_name() << endl;
+            cout << "adding sequence: " << userseqs->at(i).get_taxon_name() << endl;
 			int sequence_id = userseqs->at(i).get_sqlite_id();
 			string sequence = userseqs->at(i).get_aligned_seq();
 			insert_sequence_alignment_map(db, sequence_id, new_alignment_id, sequence);
