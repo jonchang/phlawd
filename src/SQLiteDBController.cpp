@@ -393,6 +393,17 @@ void SQLiteDBController::load_seqs(string div, string ref, bool downl) {
 			}
 		}
 
+		// download daily updates
+		if (downl == true) {
+			string fnameString = "nc*.flat.gz";
+			string cmd = "wget -nv ftp://ftp.ncbi.nih.gov/genbank/daily-nc/" + fnameString;
+			cout << "downloading dailies with wget" << endl;
+			system(cmd.c_str());
+			cmd = "gunzip -d " + fnameString;
+			cout << "uncompressing dailies" << endl;
+			system(cmd.c_str());
+		}
+
 		// get the names of the files to use
 		vector<string> file_names;
 		cout << "getting file names for gb flat files" << endl;
@@ -400,6 +411,8 @@ void SQLiteDBController::load_seqs(string div, string ref, bool downl) {
 		for (int i = 0; i < file_names.size(); i++) {
 			for (int j = 0; j < groups.size(); j++) {
 				if (file_names[i].find("gb" + groups[j]) != string::npos && file_names[i].substr(file_names[i].size() - 4, 4) == ".seq") {
+					filesToProcess.push_back(file_names[i]);
+				} else if (file_names[i].find("nc") != string::npos && file_names[i].substr(file_names[i].size() - 5, 5) == ".flat") {
 					filesToProcess.push_back(file_names[i]);
 				}
 			}
