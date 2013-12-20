@@ -99,6 +99,7 @@ int main(int argc, char* argv[]) {
 	    bool automated = false;
 	    vector <string> search;
 	    bool searchliteral = false;
+	    bool exclsearchliteral = false;
 	    string gene;
 	    double mad = 0.01;
 	    double coverage = 0.6;
@@ -170,6 +171,8 @@ int main(int argc, char* argv[]) {
 		    search = searchtokens;//change to a vector and parse with commas
 		}else if(!strcmp(tokens[0].c_str(), "searchliteral")){
 			searchliteral = true;
+		}else if(!strcmp(tokens[0].c_str(), "excludesearchliteral")){
+			exclsearchliteral = true;
 		}else if(!strcmp(tokens[0].c_str(), "gene")){
 		    gene = tokens[1];
 		    genedb = tokens[1]+".db";
@@ -275,7 +278,7 @@ int main(int argc, char* argv[]) {
 	    if(asse == true){
 		cout << "assembly" << endl;
 		SQLiteConstructor * a;
-		a = new SQLiteConstructor(clade, search, searchliteral, gene, genedb, mad, coverage, identity, db, knownfile, useITS, numthreads, automated, updateDB, updatef, assignleft, shrinkthresh, labeluserseqs);
+		a = new SQLiteConstructor(clade, search, searchliteral, exclsearchliteral, gene, genedb, mad, coverage, identity, db, knownfile, useITS, numthreads, automated, updateDB, updatef, assignleft, shrinkthresh, labeluserseqs);
 		cout << "number of threads: " << a->get_numthreads() << endl;
 		omp_set_num_threads(a->get_numthreads());
 		cout << "search clade: " << a->get_cladename() << endl;

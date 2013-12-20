@@ -52,6 +52,7 @@ private:
     string clade_name;
     vector <string> search;
     bool searchliteral;
+    bool exclsearchliteral;
     string gene_name;
     string gene_db_name;
     string genefoldername;
@@ -145,10 +146,10 @@ private:
     void add_seqs_from_db_to_seqs_vector(string alignname,vector<Sequence> * keep_seqs, vector<Sequence> & storedseqs);
 
 public:
-    SQLiteConstructor(string cn, vector <string> searchstr, bool searchlit, string genen, string genedb,
+    SQLiteConstructor(string cn, vector <string> searchstr, bool searchlit, bool exclsearchlit, string genen, string genedb,
 		      double mad_cut,double cover, double ident, string dbs,
 		      string known_seq_filen, bool its, int numt,bool autom,
-		      bool updb, string updf, bool ignoreleft, int shrinkthresh, bool labeluserseqs); // TODO: create a parameters struct that holds all this crap so we can just pass that
+		      bool updb, string updf, bool ignoreleft, int shrinkthresh, bool labeluserseqs); // TODO: create a parameters struct that holds all this stuff so we can just pass that
     ~SQLiteConstructor(){}
     void set_only_names_from_file(string filename, bool containshi, bool containswild);
     void set_exclude_names_from_file(string filename, bool, bool);

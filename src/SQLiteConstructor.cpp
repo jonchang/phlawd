@@ -78,6 +78,7 @@ SQLiteConstructor::SQLiteConstructor(
 		string cn,
 		vector<string> searchstr,
 		bool searchlit,
+		bool exclsearchlit,
 		string genen,
 		string genedb,
 		double mad_cut,
@@ -96,6 +97,7 @@ SQLiteConstructor::SQLiteConstructor(
 		clade_name(cn),
 				search(searchstr),
 				searchliteral(searchlit),
+				exclsearchliteral(exclsearchlit),
 				gene_name(genen),
 				gene_db_name(genedb),
 				mad_cutoff(mad_cut),
@@ -1227,16 +1229,28 @@ vector<Sequence> SQLiteConstructor::exclude_names_from_file(vector<Sequence>& se
 	cout << endl;
 
 	while (exclude_taxa.empty() == false) {
-		string name = exclude_taxa.back();
+		string excl_name_search = exclude_taxa.back();
 		exclude_taxa.pop_back();
 		string sql;
-		if (name[0] == '*') { //this indicates a wildcard and will ignore any taxa with this in the name
-			string name_trimmed = name.substr(1, name.size());
-			sql = "SELECT ncbi_id FROM taxonomy WHERE left_value > " + int_to_string(main_left) + " AND right_value < " + int_to_string(main_right)
-					+ " AND name like '%" + name_trimmed + "%'  and name_class == 'scientific name'";
-		} else {
-			sql = "SELECT ncbi_id FROM taxonomy WHERE name = '" + name + "'";
-		}
+		
+		if (exclsearchliteral) { // accepts SQL syntax for searching for excluded names
+		
+            sql = "SELECT ncbi_id FROM taxonomy WHERE left_value > " + int_to_string(main_left) +
+                    " AND right_value < " + int_to_string(main_right) +
+                    " AND (" + excl_name_search + ") AND name_class == 'scientific name'";
+
+        } else if (name[0] == '*') { // uses wildcard searching to ignore any taxa with this in the name
+
+            string excl_name_trimmed = excl_name_search.substr(1, excl_name_search.size());
+            sql = "SELECT ncbi_id FROM taxonomy WHERE left_value > " + int_to_string(main_left) +
+                    " AND right_value < " + int_to_string(main_right) +
+                    " AND name like '%" + excl_name_trimmed + "%'  and name_class == 'scientific name'";
+
+        } else {
+            sql = "SELECT ncbi_id FROM taxonomy WHERE name = '" + excl_name_search + "'";
+
+        }
+
 		Query query1(conn);
 		query1.get_result(sql);
 		while (query1.fetch_row()) {
