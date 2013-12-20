@@ -1229,7 +1229,7 @@ vector<Sequence> SQLiteConstructor::exclude_names_from_file(vector<Sequence>& se
 	cout << endl;
 
 	while (exclude_taxa.empty() == false) {
-		string excl_name_search = exclude_taxa.back();
+		string excl_search = exclude_taxa.back();
 		exclude_taxa.pop_back();
 		string sql;
 		
@@ -1237,17 +1237,17 @@ vector<Sequence> SQLiteConstructor::exclude_names_from_file(vector<Sequence>& se
 		
             sql = "SELECT ncbi_id FROM taxonomy WHERE left_value > " + int_to_string(main_left) +
                     " AND right_value < " + int_to_string(main_right) +
-                    " AND (" + excl_name_search + ") AND name_class == 'scientific name'";
+                    " AND (" + excl_search + ") AND name_class == 'scientific name'";
 
-        } else if (name[0] == '*') { // uses wildcard searching to ignore any taxa with this in the name
+        } else if (excl_search[0] == '*') { // uses wildcard searching to ignore any taxa with this in the name
 
-            string excl_name_trimmed = excl_name_search.substr(1, excl_name_search.size());
+            string excl_search_trimmed = excl_search.substr(1, excl_search.size());
             sql = "SELECT ncbi_id FROM taxonomy WHERE left_value > " + int_to_string(main_left) +
                     " AND right_value < " + int_to_string(main_right) +
-                    " AND name like '%" + excl_name_trimmed + "%'  and name_class == 'scientific name'";
+                    " AND name like '%" + excl_search_trimmed + "%'  and name_class == 'scientific name'";
 
         } else {
-            sql = "SELECT ncbi_id FROM taxonomy WHERE name = '" + excl_name_search + "'";
+            sql = "SELECT ncbi_id FROM taxonomy WHERE name = '" + excl_search + "'";
 
         }
 
