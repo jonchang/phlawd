@@ -1,1 +1,10 @@
-Please see http://phlawd.net for instructions on installation and running PHLAWD.
+PHLAWD is available via Homebrew.
+
+1. Install homebrew (if you haven't already)
+    ruby -e "$(curl -fsSL https://raw.github.com/Homebrew/homebrew/go/install)"
+
+2. Tap the Homebrew/science tap
+    brew tap homebrew/science
+
+3. Download, compile, and install PHLAWD and its dependencies
+    brew install phlawd
