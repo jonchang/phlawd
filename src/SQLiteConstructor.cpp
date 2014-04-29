@@ -1370,7 +1370,9 @@ void SQLiteConstructor::get_best_hits_openmp_SWPS3_justquery(vector<Sequence> & 
 	vector<double> justqueryvec2;
 	vector<string> justqueryname;
 
-#pragma omp parallel for shared(keep_seqs_rc_map,justqueryvec,justqueryvec2,justqueryname)
+	omp_set_dynamic(0);
+	omp_set_num_threads(get_numthreads());
+	#pragma omp parallel for shared(keep_seqs_rc_map,justqueryvec,justqueryvec2,justqueryname)
 	for (int i = 0; i < seqs_to_score.size(); i++) {
 		double maxide = 0;
 		double maxcov = 0;
@@ -1412,6 +1414,7 @@ void SQLiteConstructor::get_best_hits_openmp_SWPS3_justquery(vector<Sequence> & 
 				seqs_to_score[i].perm_reverse_complement(); //the sequence is suppose to be reverse complement
 		}
 	}
+
 	map<Sequence*, bool>::iterator it;
 	for (it = keep_seqs_rc_map.begin(); it != keep_seqs_rc_map.end(); it++) {
 		seqs_to_keep->push_back(*(*it).first);
@@ -1432,7 +1435,10 @@ void SQLiteConstructor::get_best_hits_openmp_SWPS3(vector<Sequence> & seqs, vect
 		known_scores.push_back(get_swps3_score_and_rc_cstyle(mat, &known_seqs->at(i), &known_seqs->at(i)));
 	}
 	map<Sequence*, bool> keep_seqs_rc_map;
-#pragma omp parallel for shared(keep_seqs_rc_map)
+	
+	omp_set_dynamic(0);
+	omp_set_num_threads(get_numthreads());
+	#pragma omp parallel for shared(keep_seqs_rc_map)
 	for (int i = 0; i < seqs.size(); i++) {
 		double maxide = 0;
 		double maxcov = 0;
@@ -1472,6 +1478,7 @@ void SQLiteConstructor::get_best_hits_openmp_SWPS3(vector<Sequence> & seqs, vect
 				seqs[i].perm_reverse_complement(); //the sequence is suppose to be reverse complement
 		}
 	}
+	
 	map<Sequence*, bool>::iterator it;
 	for (it = keep_seqs_rc_map.begin(); it != keep_seqs_rc_map.end(); it++) {
 		seqs_to_keep->push_back(*(*it).first);

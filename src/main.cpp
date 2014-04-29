@@ -280,7 +280,9 @@ int main(int argc, char* argv[]) {
 		SQLiteConstructor * a;
 		a = new SQLiteConstructor(clade, search, searchliteral, exclsearchliteral, gene, genedb, mad, coverage, identity, db, knownfile, useITS, numthreads, automated, updateDB, updatef, assignleft, shrinkthresh, labeluserseqs);
 		cout << "number of threads: " << a->get_numthreads() << endl;
-		omp_set_num_threads(a->get_numthreads());
+// setting these inside sqliteconstructor
+//		omp_set_num_threads(a->get_numthreads());
+//		omp_set_dynamic(0);
 		cout << "search clade: " << a->get_cladename() << endl;
 		for(int i=0;i<a->get_search().size(); i++){
 		    cout << "search: " << a->get_search()[i] << endl;

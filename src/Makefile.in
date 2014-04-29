@@ -1,5 +1,6 @@
 CC = g++
 CFLAGS = -msse3 -DSSE2 -O3 -g -w -Wall -fopenmp
+#CFLAGS = -msse3 -DSSE2 -O0 -ggdb -g -w -Wall -fopenmp
 prefix = /usr/bin/
 CPP_SRCS += \
 sequence.cpp \
@@ -76,7 +77,7 @@ utils.d
 
 # Each subdirectory must supply rules for building sources it contributes
 %.o: ./%.cpp
-	$(CC) $(CFLAGS)  -L../deps/linux/ -c -fmessage-length=0 -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o"$@" "$<"
+	$(CC) $(CFLAGS) -L../deps/linux/ -I../deps/linux/ -c -fmessage-length=0 -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o"$@" "$<"
 
 LIBS := -lm -lsqlitewrapped -lsqlite3 -fopenmp
 
