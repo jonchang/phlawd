@@ -124,6 +124,10 @@ SQLiteConstructor::SQLiteConstructor(
 	}
 	//initialize gene database
 	gene_db = GeneDB(gene_db_name);
+	
+	// open the source db
+	SQLiteDBController dbc = SQLiteDBController(db);
+	
 	genefoldername = genen + "_TEMPFILES/";
 	known_seqs = new vector<Sequence>();
 	user_seqs = new vector<Sequence>();
@@ -491,7 +495,7 @@ int SQLiteConstructor::run() {
 			cout << "there were no seqs left after the filtering steps. phlawd will exit" << endl;
 			exit(0);
 		}
-	}    // end skipsearch == false
+	}    // end userskipsearchdb == false
 
 	reduce_genomes(&filtered_starting_seqs);
 
@@ -1883,7 +1887,9 @@ vector<string> SQLiteConstructor::get_final_children_node_hier(Node * node) {
 	return allids;
 }
 
-void SQLiteConstructor::find_db_child_seqs_of_ncbi_taxon_id(string parent_id, vector<Sequence> * seqs_to_search, vector<Sequence> * found_seqs) {
+//void SQLiteConstructor::find_db_child_seqs_of_ncbi_taxon_id(string parent_id, vector<Sequence> * seqs_to_search, vector<Sequence> * found_seqs) {
+	
+void SQLiteConstructor::get_child_seqs_for_ncbi_tax_id(string parent_id, vector<Sequence> * seqs_to_search, vector<Sequence> * found_seqs) { //, vector<Sequence> * found_seqs_user,) {
 
 	/* this function filters sequences in the seqs_to_filter vector against
 	 * a list of valid child taxon ids for some parent provided by the function
@@ -1894,35 +1900,59 @@ void SQLiteConstructor::find_db_child_seqs_of_ncbi_taxon_id(string parent_id, ve
 	 * parent_ncbi_id) are added to the vector filtered_seqs.
 	 */
 
-	// get the ncbi taxon ids of all the valid children of this parent taxon
-	vector<string> final_ids;
-	final_ids = get_valid_ncbi_child_taxon_ids_for_parent_id(parent_id);
-	int n_seqs_to_filter = seqs_to_search->size();
+	// get the ncbi taxon ids of all the valid terminal children of this parent taxon
+	vector<string> child_tax_ids = get_valid_ncbi_child_taxon_ids_for_parent_id(parent_id);
+	set<string> user_seq_tax_ids; // remember the ids of user seqs we added so we don't add duplicates from the db
 
-	for (unsigned int i = 0; i < n_seqs_to_filter; i++) {
+	// first get all the user sequences for this taxon
+	for (unsigned int i = 0; i < user_seqs->size(); i++) {
 
-		// look for this sequence's taxon id in the list of valid ids. if we find it, the seq passes
-		string this_taxon_id = seqs_to_search->at(i).get_ncbi_tax_id();
-		bool this_seq_is_valid_child = (int) count(final_ids.begin(), final_ids.end(), this_taxon_id) > 0 ? true : false;
+		// look for this sequence's taxon id in the list of valid ids
+		string user_seq_tax_id = user_seqs->at(i).get_ncbi_tax_id();
+		bool this_seq_represents_a_child = (int) count(child_tax_ids.begin(), child_tax_ids.end(), user_seq_tax_id) > 0 ? true : false;
 
-		if (this_seq_is_valid_child) {
-			found_seqs->push_back(seqs_to_search->at(i));
+		if (this_seq_represents_a_child) {
+			found_seqs->push_back(user_seqs->at(i));
+			user_seq_tax_ids.insert(user_seq_tax_id);
 		}
 	}
+	
+	SQLiteDBController dbc = SQLiteDBController(db);
+
+	// now add db seqs
+	for (unsigned int i = 0; i < seqs_to_search->size(); i++) {
+
+		// look for this sequence's taxon id in the list of valid ids
+		string cur_seq_tax_id = seqs_to_search->at(i).get_ncbi_tax_id();
+		bool this_seq_represents_a_child = (int) count(child_tax_ids.begin(), child_tax_ids.end(), cur_seq_tax_id) > 0 ? true : false;
+
+		if (this_seq_represents_a_child) {
+			
+			// don't add the seq if its taxon is already represented by a user sequence
+			if (user_seq_tax_ids.find(cur_seq_tax_id) != user_seq_tax_ids.end()) {
+				cout << "excluding a db sequence for \"" << dbc.get_sci_name_for_ncbi_tax_id(atoi(cur_seq_tax_id.c_str())) <<
+					"\" because it is already represented by a user sequence." << endl;
+
+			} else { // no user sequence for this child taxon, so add it
+				found_seqs->push_back(seqs_to_search->at(i));
+			}
+		}
+	}
+	
+	// report to user
+	cout << "found " << found_seqs->size() - user_seq_tax_ids.size() << " database sequences and " <<
+		user_seq_tax_ids.size() << " user sequences for taxon \"" << dbc.get_sci_name_for_ncbi_tax_id(atoi(parent_id.c_str())) <<
+			"\" (ncbi id = " << parent_id << ")" << endl;
 }
 
+/*
 void SQLiteConstructor::get_seqs_for_names_user(string inname_id, vector<Sequence> * temp_seqs) {
+
 	vector<string> final_ids;
 	final_ids = get_valid_ncbi_child_taxon_ids_for_parent_id(inname_id);
-	for (unsigned int i = 0; i < user_seqs->size(); i++) {
-		string tid = user_seqs->at(i).get_ncbi_tax_id(); //was comment
-		int mycount = 0;
-		mycount = (int) count(final_ids.begin(), final_ids.end(), tid);
-		if (mycount > 0) {
-			temp_seqs->push_back(user_seqs->at(i));
-		}
-	}
-}
+
+
+} */
 
 /* for userguidetree
  * this is intended to retrieve all the seqs that are contained below a node
@@ -2238,40 +2268,45 @@ void SQLiteConstructor::saturation_tests(vector<string> taxon_ids_to_be_tested, 
 			taxon_names_to_be_tested.pop_back();
 
 			// initialize containers to hold the child sequences of this taxon
-			vector<Sequence> * test_tax_db_child_seqs = new vector<Sequence>();
-			vector<Sequence> * test_tax_user_child_seqs = new vector<Sequence>();
-			test_tax_db_child_seqs->empty();
-			test_tax_user_child_seqs->empty();
+//			vector<Sequence> * test_tax_db_child_seqs = new vector<Sequence>();
+//			vector<Sequence> * test_tax_user_child_seqs = new vector<Sequence>();
+//			test_tax_db_child_seqs->empty();
+//			test_tax_user_child_seqs->empty();
+
+			vector<Sequence> * test_tax_child_seqs = new vector<Sequence>();
+			test_tax_child_seqs->empty();
 
 			// get all the child seqs
-			find_db_child_seqs_of_ncbi_taxon_id(tax_id_to_test, source_db_seqs_to_assign, test_tax_db_child_seqs);
-			get_seqs_for_names_user(tax_id_to_test, test_tax_user_child_seqs); // TODO: still need better function names
+			get_child_seqs_for_ncbi_tax_id(tax_id_to_test, source_db_seqs_to_assign, test_tax_child_seqs);
+//			get_seqs_for_names_user(tax_id_to_test, test_tax_user_child_seqs); // TODO: still need better function names
 
 			// precalculate counts of seqs to process
-			int n_db_seqs_to_test = test_tax_db_child_seqs->size();
-			int n_user_seqs_to_test = test_tax_user_child_seqs->size();
-			int n_total_seqs_to_test = n_db_seqs_to_test + n_user_seqs_to_test;
+//			int n_db_seqs_to_test = test_tax_db_child_seqs->size();
+//			int n_user_seqs_to_test = test_tax_user_child_seqs->size();
+//			int n_seqs_to_test = test_tax_child_seqs->size();
 
-			if (n_total_seqs_to_test == 0) {
+			if (test_tax_child_seqs->size() == 0) {
 				continue; // nothing to test for this taxon
 			}
 
-			cout << "\ntaxon " << tax_name_to_test << " (ncbi id = " << tax_id_to_test << "): " << test_tax_db_child_seqs->size() << " db seqs, "
-					<< test_tax_user_child_seqs->size() << " user seqs; unassigned seqs remaining: " << seqs_to_be_assigned.size() << endl;
-			if (n_total_seqs_to_test == 1) {
+//			cout << "\ntaxon " << tax_name_to_test << " (ncbi id = " << tax_id_to_test << "): " << test_tax_child_seqs->size() << " seqs" << endl; //<< test_tax_user_child_seqs->size() << " user seqs; unassigned seqs remaining: " << seqs_to_be_assigned.size() << endl;
+			if (test_tax_child_seqs->size() == 1) {
 
 				// there can be no gaps in a one-sequence alignment, so just find the seq and set it as aligned
-				if (n_db_seqs_to_test > 0) {
-					test_tax_db_child_seqs->at(0).set_aligned_sequence(test_tax_db_child_seqs->at(0).get_sequence());
-					// TODO: should use the ncbi taxon id or the gi to find/remove db sequences
-					remove_seq_from_vector_by_taxon_name(&seqs_to_be_assigned, test_tax_db_child_seqs->at(0).get_taxon_name());
-				} else {
-					test_tax_user_child_seqs->at(0).set_aligned_sequence(test_tax_user_child_seqs->at(0).get_sequence());
-					remove_seq_from_vector_by_taxon_name(&seqs_to_be_assigned, test_tax_user_child_seqs->at(0).get_taxon_name());
-				}
+//				if (n_db_seqs_to_test > 0) {
+
+				test_tax_child_seqs->at(0).set_aligned_sequence(test_tax_child_seqs->at(0).get_sequence());
+				// TODO: should use the ncbi taxon id or the gi to find/remove db sequences
+				remove_all_matching_seqs_from_vector_by_taxon_name(&seqs_to_be_assigned, test_tax_child_seqs->at(0).get_taxon_name());
+
+//				} else {
+//					test_tax_user_child_seqs->at(0).set_aligned_sequence(test_tax_user_child_seqs->at(0).get_sequence());
+//					remove_seq_from_vector_by_taxon_name(&seqs_to_be_assigned, test_tax_user_child_seqs->at(0).get_taxon_name());
+//				}
 
 				// add the alignment record to the db
-				int alignid = gene_db.add_original_alignment(tax_id_to_test, test_tax_db_child_seqs, test_tax_user_child_seqs);
+//				int alignid = gene_db.add_original_alignment(tax_id_to_test, test_tax_db_child_seqs, test_tax_user_child_seqs);
+				int alignid = gene_db.add_original_alignment(tax_id_to_test, test_tax_child_seqs);
 				if (updateDB == true)
 					gene_db.toggle_alignment_update(alignid);
 				original_alignments_added.push_back(alignid);
@@ -2280,14 +2315,16 @@ void SQLiteConstructor::saturation_tests(vector<string> taxon_ids_to_be_tested, 
 				double mad;
 				cout << "using mafft for preliminary alignment" << endl;
 
-				if (n_total_seqs_to_test < 2) {
+				if (test_tax_child_seqs->size() < 2) {
 					// can't calculate mad for fewer than three seqs; just do alignment
-					make_mafft_multiple_alignment(test_tax_db_child_seqs, test_tax_user_child_seqs);
+//					make_mafft_multiple_alignment(test_tax_db_child_seqs, test_tax_user_child_seqs);
+					make_mafft_multiple_alignment(test_tax_child_seqs);
 					mad = 0;
 
-				} else if (n_total_seqs_to_test < MAX_SEQS_PER_ALIGNMENT) {
+				} else if (test_tax_child_seqs->size() < MAX_SEQS_PER_ALIGNMENT) {
 					// as long as we don't have too many seqs, do the alignment and get the mad score
-					make_mafft_multiple_alignment(test_tax_db_child_seqs, test_tax_user_child_seqs);
+//					make_mafft_multiple_alignment(test_tax_db_child_seqs, test_tax_user_child_seqs);
+					make_mafft_multiple_alignment(test_tax_child_seqs);
 					mad = calculate_MAD_quicktree();
 
 				} else {
@@ -2325,7 +2362,7 @@ void SQLiteConstructor::saturation_tests(vector<string> taxon_ids_to_be_tested, 
 					if (rank != "genus") {
 						explode_taxon = true;
 
-					} else {
+					} else { // if it is a genus...
 
 						// get all the immediate taxonomic children of the genus
 						vector<string> child_ids;
@@ -2373,18 +2410,28 @@ void SQLiteConstructor::saturation_tests(vector<string> taxon_ids_to_be_tested, 
 				if (add_alignment) {
 
 					// read in the seqs from the last alignment
-					update_seqs_using_last_alignment(test_tax_db_child_seqs, test_tax_user_child_seqs);
+//					update_seqs_using_last_alignment(test_tax_db_child_seqs, test_tax_user_child_seqs);
+					update_seqs_using_last_alignment(test_tax_child_seqs);
 
 					// remove the seqs we are assigning from the to-be-assigned vector
-					for (int i = 0; i < test_tax_db_child_seqs->size(); i++) {
+/*					for (int i = 0; i < test_tax_db_child_seqs->size(); i++) {
 						remove_seq_from_vector_by_taxon_name(&seqs_to_be_assigned, test_tax_db_child_seqs->at(i).get_taxon_name());
 					}
 					for (int i = 0; i < test_tax_user_child_seqs->size(); i++) {
 //                        cout << "extracting user sequence from alignment by name: " << test_tax_user_child_seqs->at(i).get_taxon_name() << endl;
 						remove_seq_from_vector_by_taxon_name(&seqs_to_be_assigned, test_tax_user_child_seqs->at(i).get_taxon_name());
-					}
+					} */
 
-					int alignid = gene_db.add_original_alignment(tax_id_to_test, test_tax_db_child_seqs, test_tax_user_child_seqs);
+
+//					cout << endl << "removing sequences (currently there are " << seqs_to_be_assigned.size() << ")" << endl;
+					for (int i = 0; i < test_tax_child_seqs->size(); i++) {
+//						cout << test_tax_child_seqs->at(pp).get_taxon_name() << endl;
+						remove_all_matching_seqs_from_vector_by_taxon_name(&seqs_to_be_assigned, test_tax_child_seqs->at(i).get_taxon_name());
+					}
+//					cout << endl << "removed " << pp << "sequences, now there are " << seqs_to_be_assigned.size() << endl;
+
+//					int alignid = gene_db.add_original_alignment(tax_id_to_test, test_tax_db_child_seqs, test_tax_user_child_seqs);
+					int alignid = gene_db.add_original_alignment(tax_id_to_test, test_tax_child_seqs);
 					if (updateDB == true) {
 						gene_db.toggle_alignment_update(alignid);
                     }
@@ -2392,8 +2439,18 @@ void SQLiteConstructor::saturation_tests(vector<string> taxon_ids_to_be_tested, 
 					original_alignments_added.push_back(alignid);
 				}
 			}
-			delete (test_tax_db_child_seqs);
-			delete (test_tax_user_child_seqs);
+			delete (test_tax_child_seqs);
+			
+			/*
+			cout << endl << "remaining in seqs_to_be_assigned:" << endl;
+			for (int q = 0; q < seqs_to_be_assigned.size(); q++) {
+				cout << seqs_to_be_assigned.at(q).get_taxon_name() << endl;
+			}
+			cout << endl;
+			*/
+
+//			delete (test_tax_db_child_seqs);
+//			delete (test_tax_user_child_seqs);
             
 		} // END NCBI SATURATION
         
@@ -2444,15 +2501,24 @@ void SQLiteConstructor::saturation_tests(vector<string> taxon_ids_to_be_tested, 
 				//make file
 				for (int i = 0; i < test_tax_db_seqs->size(); i++) {
 					test_tax_db_seqs->at(i).set_aligned_sequence(test_tax_db_seqs->at(i).get_sequence());
-					remove_seq_from_vector_by_taxon_name(&seqs_to_be_assigned, test_tax_db_seqs->at(i).get_taxon_name());
+					remove_all_matching_seqs_from_vector_by_taxon_name(&seqs_to_be_assigned, test_tax_db_seqs->at(i).get_taxon_name());
 				}
 				//user seqs
 				for (int i = 0; i < test_tax_user_child_seqs->size(); i++) {
 					test_tax_user_child_seqs->at(i).set_aligned_sequence(test_tax_user_child_seqs->at(i).get_sequence());
-					remove_seq_from_vector_by_taxon_name(&seqs_to_be_assigned, test_tax_user_child_seqs->at(i).get_taxon_name());
+					remove_all_matching_seqs_from_vector_by_taxon_name(&seqs_to_be_assigned, test_tax_user_child_seqs->at(i).get_taxon_name());
 				}
 				string alignment_name = curnode->getName();
-				int alignid = gene_db.add_original_alignment(alignment_name, test_tax_db_seqs, test_tax_user_child_seqs);
+				
+				
+
+				// NOTE: this is getting deactivated for now, because user seqs are no longer treated separately and
+				// the add_original_alignment function only accepts one argument. THIS WILL BREAK THINGS IF TRYING TO RUN THE UPDATE.
+//				int alignid = gene_db.add_original_alignment(alignment_name, test_tax_db_seqs, test_tax_user_child_seqs);
+				int alignid = 0; // FAKE. JUST HERE AS A PLACEHOLDER
+
+
+
 				if (updateDB == true)
 					gene_db.toggle_alignment_update(alignid);
 				original_alignments_added.push_back(alignid);
@@ -2485,15 +2551,34 @@ void SQLiteConstructor::saturation_tests(vector<string> taxon_ids_to_be_tested, 
 				cout << "mad: " << mad << endl;
 				//if mad scores are good, store result
 				if (mad <= mad_cutoff) {
-					update_seqs_using_last_alignment(test_tax_db_seqs, test_tax_user_child_seqs);
+					
+					
+					
+					// NOTE: this is getting deactivated for now, because user seqs are no longer treated separately and
+					// the add_original_alignment function only accepts one argument. THIS WILL BREAK THINGS IF TRYING TO RUN THE UPDATE.
+//					update_seqs_using_last_alignment(test_tax_db_seqs, test_tax_user_child_seqs);
+					
+
+
 					for (int i = 0; i < test_tax_db_seqs->size(); i++) {
-						remove_seq_from_vector_by_taxon_name(&seqs_to_be_assigned, test_tax_db_seqs->at(i).get_taxon_name());
+						remove_all_matching_seqs_from_vector_by_taxon_name(&seqs_to_be_assigned, test_tax_db_seqs->at(i).get_taxon_name());
 					}
 					for (int i = 0; i < test_tax_user_child_seqs->size(); i++) {
-						remove_seq_from_vector_by_taxon_name(&seqs_to_be_assigned, test_tax_user_child_seqs->at(i).get_taxon_name());
+						remove_all_matching_seqs_from_vector_by_taxon_name(&seqs_to_be_assigned, test_tax_user_child_seqs->at(i).get_taxon_name());
 					}
 					string alignment_name = curnode->getName();
-					int alignid = gene_db.add_original_alignment(alignment_name, test_tax_db_seqs, test_tax_user_child_seqs);
+					
+					
+					
+					
+					// NOTE: this is getting deactivated for now, because user seqs are no longer treated separately and
+					// the add_original_alignment function only accepts one argument. THIS WILL BREAK THINGS IF TRYING TO RUN THE UPDATE.
+//					int alignid = gene_db.add_original_alignment(alignment_name, test_tax_db_seqs, test_tax_user_child_seqs);
+					int alignid = 0; // FAKE. JUST HERE AS A PLACEHOLDER
+
+
+
+
 					if (updateDB == true)
 						gene_db.toggle_alignment_update(alignid);
 					original_alignments_added.push_back(alignid);
@@ -2724,39 +2809,65 @@ string SQLiteConstructor::get_genedb() {
 	return gene_db_name;
 }
 
-void SQLiteConstructor::remove_seq_from_vector_by_taxon_name(vector<Sequence> * v, string taxon_name) {
-	int position = 0;
-	int sz = v->size();
-	for (int i = 0; i < sz; i++) {
+//void SQLiteConstructor::remove_seq_from_vector_by_taxon_name(vector<Sequence> * v, string taxon_name) {
+void SQLiteConstructor::remove_all_matching_seqs_from_vector_by_taxon_name(vector<Sequence> * v, string taxon_name) {
+//	int position = 0;
+	vector<int> matched_positions;
+//	int sz = v->size();
+	for (int i = 0; i < v->size(); i++) {
 		if (taxon_name == (*v)[i].get_taxon_name()) {
-			position = i;
-			break;
+			// decrement the index by the number of previous matches because they will be deleted before we get to this one
+			matched_positions.push_back(i - matched_positions.size());
+//			break;
 		}
 	}
-	v->erase(v->begin() + position);
-	if (v->size() != sz - 1) {
+
+	for (int i = 0; i < matched_positions.size(); i++) {
+		v->erase(v->begin() + matched_positions.at(i));
+	}
+
+//	if (v->size() != sz - 1) {
+	if (matched_positions.size() < 1) {
 		cerr << "sequence '" + taxon_name + "' could not be removed from the vector. it may not have been found" << endl;
 		exit(1);
+//	} else {
+//		cout << "erased " << matched_positions.size() << " matching sequences" << endl;
 	}
 }
 
-void SQLiteConstructor::remove_seq_from_vector_by_ncbi_id(vector<Sequence> * v, string ncbi_id) {
-	int position = 0;
-	int sz = v->size();
-	for (int i = 0; i < sz; i++) {
+//void SQLiteConstructor::remove_seq_from_vector_by_ncbi_id(vector<Sequence> * v, string ncbi_id) {
+void SQLiteConstructor::remove_all_matching_seqs_from_vector_by_ncbi_id(vector<Sequence> * v, string ncbi_id) {
+//	int position = 0;
+	vector<int> matched_positions;
+//	int sz = v->size();
+	for (int i = 0; i < v->size(); i++) {
 		if (ncbi_id == (*v)[i].get_ncbi_tax_id()) {
-			position = i;
-			break;
+			// decrement the index by the number of previous matches because they will be deleted before we get to this one
+			matched_positions.push_back(i - matched_positions.size());
+//			position = i;
+//			break;
 		}
 	}
-	v->erase(v->begin() + position);
-	if (v->size() != sz - 1) {
-		cerr << "sequence for ncbi taxon '" + ncbi_id + "' could not be removed from the vector. it may not have been found" << endl;
-		exit(1);
+//	v->erase(v->begin() + position);
+	for (int i = 0; i < matched_positions.size(); i++) {
+		v->erase(v->begin() + matched_positions.at(i));
 	}
+
+	if (matched_positions.size() < 1) {
+		cerr << "sequence '" + ncbi_id + "' could not be removed from the vector. it may not have been found" << endl;
+		exit(1);
+	} else {
+		cout << "erased " << matched_positions.size() << " matching sequences" << endl;
+	}
+
+//	if (v->size() != sz - 1) {
+//		cerr << "sequence for ncbi taxon '" + ncbi_id + "' could not be removed from the vector. it may not have been found" << endl;
+//		exit(1);
+//	}
 }
 
-void SQLiteConstructor::update_seqs_using_last_alignment(vector<Sequence> * db_seqs_to_update, vector<Sequence> * user_seqs_to_update) {
+//void SQLiteConstructor::update_seqs_using_last_alignment(vector<Sequence> * db_seqs_to_update, vector<Sequence> * user_seqs_to_update) {
+void SQLiteConstructor::update_seqs_using_last_alignment(vector<Sequence> * seqs_to_update) {
 	FastaUtil fu;
 	vector<Sequence> aligned_seqs;
 	string outfile = genefoldername + "outfile";
@@ -2764,6 +2875,18 @@ void SQLiteConstructor::update_seqs_using_last_alignment(vector<Sequence> * db_s
 	for (int i = 0; i < aligned_seqs.size(); i++) {
 
 		bool set = false;
+
+		for (int j = 0; j < seqs_to_update->size(); j++) {
+			if (aligned_seqs[i].get_ncbi_tax_id() == seqs_to_update->at(j).get_ncbi_tax_id()) {
+
+//                	cout << "updating db sequence: " << aligned_seqs[i].get_ncbi_tax_id() << endl;
+
+				seqs_to_update->at(j).set_aligned_sequence(aligned_seqs[i].get_sequence());
+//                    cout << "added to db seqs" << endl;
+				set = true;
+				break;
+			}
+		}
         
 //        cout << "adding to incoming sequences: " << aligned_seqs.at(i).get_taxon_name() << "... ";
         
@@ -2787,6 +2910,7 @@ void SQLiteConstructor::update_seqs_using_last_alignment(vector<Sequence> * db_s
 			}
 		} */
 
+/*
         if (aligned_seqs[i].is_user_seq() == true) {
             for (int j = 0; j < user_seqs_to_update->size(); j++) {
 				if (aligned_seqs[i].get_taxon_name() == user_seqs_to_update->at(j).get_taxon_name()) {
@@ -2812,6 +2936,7 @@ void SQLiteConstructor::update_seqs_using_last_alignment(vector<Sequence> * db_s
                 }
             }
         }
+        */
         
 		if (set == false) {
 			cout << "error, could not find match for " << aligned_seqs[i].get_taxon_name() << ". phlawd will exit" << endl;
