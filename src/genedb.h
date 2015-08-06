@@ -35,7 +35,8 @@ public:
     // adding and removing db records
     // these are low level queries primarily used within the GeneDB class, should perhaps be made private
     void add_sequences(vector<Sequence> * seqs);
-    int add_original_alignment(string & filen, vector<Sequence> * dbseqs, vector<Sequence> * userseqs);
+//    int add_original_alignment(string & filen, vector<Sequence> * dbseqs, vector<Sequence> * userseqs);
+    int add_original_alignment(string & filen, vector<Sequence> * seqs);
     int add_profile_alignment(string & profile_name, int child1_id, int child2_id, vector<Sequence> & sequences);
     int add_profile_alignment(string & profile_name, vector<Sequence> & sequences);
     int add_empty_intermediate_profile(int child1_id, int child2_id); // TODO: just for SQLiteProfiler, should be deprecated

@@ -492,7 +492,8 @@ int GeneDB::add_empty_intermediate_profile(int child1_id, int child2_id) {
  }
  */
 
-int GeneDB::add_original_alignment(string & aln_name, vector<Sequence> * dbseqs, vector<Sequence> * userseqs) {
+//int GeneDB::add_original_alignment(string & aln_name, vector<Sequence> * dbseqs, vector<Sequence> * userseqs) {
+int GeneDB::add_original_alignment(string & aln_name, vector<Sequence> * dbseqs) {
 
 	/* creates a new alignment record in the database 'alignments' table,
 	 * and adds records to the sequence_alignment_map table to associate
@@ -515,25 +516,31 @@ int GeneDB::add_original_alignment(string & aln_name, vector<Sequence> * dbseqs,
 		new_alignment_id = insert_alignment(db, aln_name, 0);
 		cout << "adding alignment to database: " << new_alignment_id << endl;
 
-		// now add the dbseqs
+		// now add the seqs
+//		cout << "will add " << dbseqs->size() << " sequences" << endl;
 		for (int i = 0; i < dbseqs->size(); i++) {
+//			cout << i << " ";
 			int sequence_id = dbseqs->at(i).get_sqlite_id();
+//			cout << sequence_id << " ";
 			string sequence = dbseqs->at(i).get_aligned_seq();
+//			cout << sequence << endl;
 			insert_sequence_alignment_map(db, sequence_id, new_alignment_id, sequence);
 		}
 
 		// now the user seqs
-		for (int i = 0; i < userseqs->size(); i++) {
+/*		for (int i = 0; i < userseqs->size(); i++) {
 //            cout << "adding sequence: " << userseqs->at(i).get_taxon_name() << endl;
 			int sequence_id = userseqs->at(i).get_sqlite_id();
 			string sequence = userseqs->at(i).get_aligned_seq();
 			insert_sequence_alignment_map(db, sequence_id, new_alignment_id, sequence);
-		}
+		} */
 
 		// clean up
 		commit_transaction(db);
-	} else
-		cerr << "Could not create the alignment because the database " << name << " could not be opened" << endl;
+	} else {
+		cout << "Could not create the alignment because the database " << name << " could not be opened" << endl;
+		exit(1);
+	}
 
 	sqlite3_close(db);
 

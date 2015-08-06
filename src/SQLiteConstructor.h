@@ -33,6 +33,7 @@ using namespace std;
 
 #include "libsqlitewrapped.h"
 
+//#include "SQLiteDBController.h"
 #include "sequence.h"
 
 #include "tree.h"
@@ -52,10 +53,12 @@ private:
     string clade_name;
     vector <string> search;
     bool searchliteral;
+    bool exclsearchliteral;
     string gene_name;
     string gene_db_name;
     string genefoldername;
     GeneDB gene_db;
+//    SQLiteDBController dbc;
     double mad_cutoff;
     double coverage;
     double identity;
@@ -116,11 +119,15 @@ private:
     void clean_shrunken_genomes();
 
     void load_info_on_immediate_children_of_taxon_id_into(string parent_taxon_id, vector<string> & child_ids, vector<string> & child_tax_names);
-    void find_db_child_seqs_of_ncbi_taxon_id(string parent_taxon_id, vector<Sequence> * seqs_to_search, vector<Sequence> * found_seqs);
+//    void find_db_child_seqs_of_ncbi_taxon_id(string parent_taxon_id, vector<Sequence> * seqs_to_search, vector<Sequence> * found_seqs);
+	void get_child_seqs_for_ncbi_tax_id(string parent_taxon_id, vector<Sequence> * seqs_to_search, vector<Sequence> * found_seqs);
     vector<string> get_valid_ncbi_child_taxon_ids_for_parent_id(string name_id);
 
-    void remove_seq_from_vector_by_ncbi_id(vector<Sequence> * inseqs, string ncbi_id);
-    void remove_seq_from_vector_by_taxon_name(vector<Sequence> * inseqs, string tname);
+//    void remove_seq_from_vector_by_ncbi_id(vector<Sequence> * inseqs, string ncbi_id);
+    void remove_all_matching_seqs_from_vector_by_ncbi_id(vector<Sequence> * inseqs, string ncbi_id);
+
+//    void remove_seq_from_vector_by_taxon_name(vector<Sequence> * inseqs, string tname);
+    void remove_all_matching_seqs_from_vector_by_taxon_name(vector<Sequence> * inseqs, string tname);
 
     void get_seqs_for_names_user(string name_id, vector<Sequence> * seqs);
     void get_seqs_for_nodes(Node * node, vector<Sequence> * seqs, vector<Sequence> * temp_seqs);
@@ -138,17 +145,18 @@ private:
     int get_single_to_group_seq_score(Sequence & inseq,vector<Sequence> & ginseqs);
     void write_gi_numbers(vector<Sequence> *);
     void write_user_numbers();
-    void update_seqs_using_last_alignment(vector<Sequence> * db_seqs_to_update, vector<Sequence> * user_seqs_to_update);
+//    void update_seqs_using_last_alignment(vector<Sequence> * db_seqs_to_update, vector<Sequence> * user_seqs_to_update);
+    void update_seqs_using_last_alignment(vector<Sequence> * seqs_to_update);
     void retrieve_aligned_sequence_from_last_alignment_for_seq(Sequence * temp_seq);
 
     void load_sequences_from_last_alignment_into(vector<Sequence> & seqs);
     void add_seqs_from_db_to_seqs_vector(string alignname,vector<Sequence> * keep_seqs, vector<Sequence> & storedseqs);
 
 public:
-    SQLiteConstructor(string cn, vector <string> searchstr, bool searchlit, string genen, string genedb,
+    SQLiteConstructor(string cn, vector <string> searchstr, bool searchlit, bool exclsearchlit, string genen, string genedb,
 		      double mad_cut,double cover, double ident, string dbs,
 		      string known_seq_filen, bool its, int numt,bool autom,
-		      bool updb, string updf, bool ignoreleft, int shrinkthresh, bool labeluserseqs); // TODO: create a parameters struct that holds all this crap so we can just pass that
+		      bool updb, string updf, bool ignoreleft, int shrinkthresh, bool labeluserseqs); // TODO: create a parameters struct that holds all this stuff so we can just pass that
     ~SQLiteConstructor(){}
     void set_only_names_from_file(string filename, bool containshi, bool containswild);
     void set_exclude_names_from_file(string filename, bool, bool);
