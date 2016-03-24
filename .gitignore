@@ -1,11 +1,9 @@
 *.o
 *.d
-.gitignore
-.autotools
-.cproject
-.project
-.settings
-EDNAFULL
+.DS_Store
+*~
+autom4te.cache
+config.h
+config.log
+config.status
 PHLAWD
-tests
-examples/*
