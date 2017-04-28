@@ -106,7 +106,7 @@ bool SQLiteDBController::initiate() {
 	Database conn(db_name);
 	Query query(conn);
 	query.get_result(
-			"create table taxonomy (id INTEGER PRIMARY KEY,ncbi_id INTEGER,name VARCHAR(255),name_class VARCHAR(32),node_rank VARCHAR(32),parent_ncbi_id INTEGER,edited_name VARCHAR(255),left_value INTEGER,right_value INTEGER);");
+			"create table taxonomy (id INTEGER PRIMARY KEY,ncbi_id INTEGER,name TEXT,name_class TEXT,node_rank TEXT,parent_ncbi_id INTEGER,edited_name TEXT,left_value INTEGER,right_value INTEGER);");
 	query.free_result();
 	query.get_result("CREATE INDEX taxonomy_left_value on taxonomy(left_value);");
 	query.free_result();
@@ -122,7 +122,7 @@ bool SQLiteDBController::initiate() {
 	query.free_result();
 
 	query.get_result(
-			"create table sequence (id INTEGER PRIMARY KEY,ncbi_id INTEGER,accession_id VARCHAR(128),identifier VARCHAR(40),description TEXT,seq LONGTEXT);");
+			"create table sequence (id INTEGER PRIMARY KEY,ncbi_id INTEGER,accession_id TEXT,identifier TEXT,description TEXT,seq LONGTEXT);");
 	query.free_result();
 	query.get_result("CREATE INDEX sequence_ncbi_id on sequence(ncbi_id);");
 	query.free_result();
@@ -131,7 +131,7 @@ bool SQLiteDBController::initiate() {
 	query.get_result("CREATE INDEX sequence_identifier on sequence(identifier);");
 	query.free_result();
 
-	query.get_result("create table information (id INTEGER PRIMARY KEY, name VARCHAR(128), value VARCHAR(128));");
+	query.get_result("create table information (id INTEGER PRIMARY KEY, name TEXT, value TEXT);");
 	query.free_result();
 	return ret;
 }
