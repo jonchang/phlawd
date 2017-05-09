@@ -25,11 +25,9 @@ Homebrew (https://brew.sh) on macOS or Linuxbrew (https://linuxbrew.sh).
 Installation
 ------------
 
-```sh
 git clone https://github.com/jonchang/phlawd.git
 cd phlawd/
 cd src/
 ./configure
 make
 install PHLAWD /usr/local/bin # or wherever...
-```
