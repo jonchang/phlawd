@@ -1,0 +1,12 @@
+.git
+.gitignore
+*.o
+*.d
+src/config.log
+src/config.status
+src/config.h
+src/Makefile
+src/autom4te.cache
+examples/*.phlawd
+examples/*.keep
+
