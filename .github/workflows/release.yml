@@ -57,7 +57,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
 
       - name: Build Docker image for registry
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         id: build
         with:
           context: .
