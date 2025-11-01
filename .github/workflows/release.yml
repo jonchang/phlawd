@@ -83,7 +83,7 @@ jobs:
           echo "Image tarball created: phlawd-image-${TAG_NAME}.tar.gz"
 
       - name: Create GitHub Release and upload image
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: phlawd-image-*.tar.gz
           generate_release_notes: true
