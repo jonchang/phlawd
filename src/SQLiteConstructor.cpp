@@ -132,6 +132,16 @@ SQLiteConstructor::SQLiteConstructor(
 	known_seqs = new vector<Sequence>();
 	user_seqs = new vector<Sequence>();
 	seqReader.read_user_fasta_into(*known_seqs, known_seq_filen); // the keepfile sequences cannot have gaps
+	if (known_seqs->empty()) {
+		cerr << "knownfile \"" << known_seq_filen << "\" not found or empty" << endl;
+		exit(1);
+	}
+	for (size_t i = 0; i < known_seqs->size(); i++) {
+		if (!known_seqs->at(i).has_sequence_data()) {
+			cerr << "knownfile \"" << known_seq_filen << "\" has an entry with no sequence data (empty or header-only)" << endl;
+			exit(1);
+		}
+	}
 	ncbi_saturation = true;
 	userskipsearchdb = false;
 	skipdbcheck = false;
@@ -916,13 +926,22 @@ vector<Sequence> SQLiteConstructor::make_seqs_from_seq_tuples_for_taxon(int taxo
 			Query qseq(conn);
 			sql = "SELECT accession_id, identifier, description, seq FROM sequence WHERE id == " + this_seq_db_id;
 			qseq.get_result(sql);
+			bool got_row = false;
 			while (qseq.fetch_row()) {
+				got_row = true;
 				this_seq_accession_number = qseq.getstr();
 				this_seq_gi_number = qseq.getstr();
 				this_seq_description = qseq.getstr();
 				this_seq_sequence_unaligned = qseq.getstr();
 			}
 			qseq.free_result();
+
+			if (got_row && this_seq_sequence_unaligned.empty()) {
+				cerr << "source DB returned empty seq for sequence id " << this_seq_db_id << ". Expected columns: accession_id, identifier, description, seq" << endl;
+				exit(1);
+			}
+			if (!got_row)
+				continue;
 
 			// make the new sequence object, set the dbid (as an int, not string)
 			Sequence tseq = Sequence();

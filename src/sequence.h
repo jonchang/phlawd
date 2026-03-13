@@ -54,6 +54,7 @@ public:
     Sequence(string,string,bool);
     Sequence(string,string); */
     bool is_aligned();
+    bool has_sequence_data() const;
     bool is_user_seq();
     bool is_original_seq();
     bool is_exemplar();

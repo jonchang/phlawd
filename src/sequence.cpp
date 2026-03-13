@@ -205,6 +205,10 @@ bool Sequence::is_aligned() {
 	return b_is_aligned;
 }
 
+bool Sequence::has_sequence_data() const {
+	return (!unaligned_seq.empty()) || (b_is_aligned && !aligned_seq.empty());
+}
+
 bool Sequence::is_user_seq() {
 	return b_is_user_seq;
 }
