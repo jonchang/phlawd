@@ -63,6 +63,7 @@ typedef struct{
 
 typedef int8_t * SBMatrix;
 //took out const
+// Returns alignment score, or -1 if test sequence contains invalid characters (non A-Z).
 int swps3_maxscores ( SBMatrix matrix , Sequence * known,  Sequence * test);
 
 #endif /* SWPS3_H */

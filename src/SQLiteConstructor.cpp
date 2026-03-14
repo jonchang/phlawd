@@ -649,7 +649,17 @@ int SQLiteConstructor::run() {
 					if (lefttid > l_id && righttid < r_id) {
 						if ((int) count(search_clade_tax_ids.begin(), search_clade_tax_ids.end(), t_id) == 0) {
 							search_clade_tax_ids.push_back(t_id);
-							search_clade_tax_ids.push_back(align_names[i]);
+							// saturation_tests expects 1:1 ids and names; get scientific name for this taxon
+							string tax_name_to_add;
+							Query query_name(conn);
+							query_name.get_result("SELECT name FROM taxonomy WHERE ncbi_id = " + t_id + " AND name_class = 'scientific name';");
+							while (query_name.fetch_row()) {
+								tax_name_to_add = query_name.getstr();
+							}
+							query_name.free_result();
+							if (tax_name_to_add.size() == 0)
+								tax_name_to_add = t_id; // fallback to id if no name
+							search_clade_tax_names.push_back(tax_name_to_add);
 							//add the sequences from the file into keep_seqs , this should be easier when moving to sqlite
 							add_seqs_from_db_to_seqs_vector(align_names[i], seqs_to_align, preexisting_seqs);
 							gene_db.remove_original_alignment_by_name(align_names[i]);
@@ -2719,11 +2729,10 @@ int SQLiteConstructor::get_single_to_group_seq_score(Sequence & inseq, vector<Se
 	vector<int> scores;
 	SBMatrix mat = swps3_readSBMatrix("EDNAFULL");
 	for (int i = 0; i < ginseqs.size(); i++) {
-		double maxide = 0;
 		int ret = swps3_maxscores(mat, &inseq, &ginseqs[i]);
 		double tsc = double(ret);
-		//cout <<i << " " << j << " " << ret << " " << retrc << " " << known_scores[j] << " " <<  tsc << endl;
-		if (std::numeric_limits<double>::infinity() != tsc) {
+		// Skip invalid sequence (sentinel -1) and infinity
+		if (ret != -1 && std::numeric_limits<double>::infinity() != tsc) {
 			scores.push_back(tsc);
 		}
 	}
@@ -2732,6 +2741,7 @@ int SQLiteConstructor::get_single_to_group_seq_score(Sequence & inseq, vector<Se
 		if (scores[i] > maxide)
 			maxide = scores[i];
 	}
+	return (int)maxide;
 }
 
 /*

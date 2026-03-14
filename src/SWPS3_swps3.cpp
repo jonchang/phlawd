@@ -153,10 +153,13 @@ int swps3_maxscores ( SBMatrix matrix , Sequence * known, Sequence * test){
                 //db=test->toString().c_str();
                 dbLen = test->get_sequence().size();
         } else {
-                printf("sequence %d is corrupt:\nname: %s\ntax_id: %s\nncbi_gi_id: %s\nsequence: %s",
-                        test->get_taxon_name().c_str(),test->get_taxon_name().c_str(),test->get_ncbi_tax_id().c_str(),
-                        test->get_ncbi_gi_number().c_str(),test->get_sequence().c_str());
-                throw 1;
+                /* Invalid characters (non A-Z) in sequence; return sentinel so callers can skip. */
+                printf("sequence corrupt (invalid characters): name=%s tax_id=%s ncbi_gi=%s sequence (first 80)=%.80s\n",
+                        test->get_taxon_name().c_str(), test->get_ncbi_tax_id().c_str(),
+                        test->get_ncbi_gi_number().c_str(), test->get_sequence().c_str());
+                free(x1);
+                free(x2);
+                return -1;
         }
 
 #ifdef DEBUG
