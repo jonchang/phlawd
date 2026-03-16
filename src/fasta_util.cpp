@@ -21,6 +21,18 @@ struct upper {
 	}
 };
 
+// Keep only A-Z so PHLAWD SWPS3 (and known-file use) never see gaps or invalid chars.
+static void strip_to_az(string & s) {
+	string out;
+	out.reserve(s.size());
+	for (size_t i = 0; i < s.size(); i++) {
+		char c = s[i];
+		if (c >= 'A' && c <= 'Z')
+			out += c;
+	}
+	s = out;
+}
+
 bool FastaUtil::read_aligned_fasta_into(vector<Sequence> & seqs, string & filen) {
 	bool is_aligned = true;
 	bool is_user_fasta = false;
@@ -66,6 +78,9 @@ bool FastaUtil::readFile(string & filen, vector<Sequence> & seqs, bool is_aligne
 
 				// make the last seq uppercase, add it to the last seq object
 				std::transform(curseq.begin(), curseq.end(), curseq.begin(), upper());
+				// known/keep file is assumed unaligned; strip gaps and invalid chars so SWPS3 never sees them
+				if (is_user_fasta)
+					strip_to_az(curseq);
 				if (is_aligned)
 					cur.set_aligned_sequence(curseq);
 				else
@@ -87,6 +102,8 @@ bool FastaUtil::readFile(string & filen, vector<Sequence> & seqs, bool is_aligne
 
 	// finish the last seq object before we stop
 	std::transform(curseq.begin(), curseq.end(), curseq.begin(), upper());
+	if (is_user_fasta)
+		strip_to_az(curseq);
 	if (is_aligned)
 		cur.set_aligned_sequence(curseq);
 	else
